@@ -52,17 +52,17 @@
 **Goal:** Create React Native project with navigation  
 **Test:** Run app on simulator/device, see blank screen
 
-- [ ] Run `npx create-expo-app frontend --template blank-typescript`
-- [ ] Install dependencies:
+- [ ] ~~Run `npx create-expo-app frontend --template blank-typescript`~~
+- [ ] ~~Install dependencies:~~
   - `expo-router` (or React Navigation)
   - `react-native-gifted-chat`
   - `react-native-reanimated`
   - `react-native-gesture-handler`
   - `react-native-safe-area-context`
-- [ ] Configure `app.json` with app name, bundle identifier, version
-- [ ] Create basic folder structure in `frontend/src/`:
+- [ ] ~~Configure `app.json` with app name, bundle identifier, version~~
+- [ ] ~~Create basic folder structure in `frontend/src/`:~~
   - `screens/`, `components/`, `navigation/`, `services/`, `hooks/`, `types/`, `utils/`
-- [ ] Create placeholder `App.tsx` with "Verbalist" text
+- [ ] ~~Create placeholder `App.tsx` with "Verbalist" text~~
 
 **Dependencies:** 0.1  
 **Estimated time:** 20 min
@@ -73,13 +73,13 @@
 **Goal:** Setup Firebase project and Firestore  
 **Test:** Access Firebase Console, verify project exists
 
-- [ ] Create Firebase project in Firebase Console
-- [ ] Enable Firestore Database (start in test mode for now)
-- [ ] Enable Firebase Authentication with anonymous provider
-- [ ] Install Firebase CLI globally: `npm install -g firebase-tools`
-- [ ] Run `firebase login` and `firebase init` in backend directory
-- [ ] Select Firestore and Functions during initialization
-- [ ] Create `backend/firestore.rules` with basic security rules
+- [ ] ~~Create Firebase project in Firebase Console~~
+- [ ] ~~Enable Firestore Database (start in test mode for now)~~
+- [ ] ~~Enable Firebase Authentication with anonymous provider~~
+- [ ] ~~Install Firebase CLI globally: `npm install -g firebase-tools`~~
+- [ ] ~~Run `firebase login` and `firebase init` in backend directory~~
+- [ ] ~~Select Firestore and Functions during initialization~~
+- [ ] ~~Create `backend/firestore.rules` with basic security rules~~
 - [ ] Deploy initial Firestore rules: `firebase deploy --only firestore:rules`
 
 **Dependencies:** 0.1  
@@ -91,12 +91,12 @@
 **Goal:** Initialize Firebase SDK in React Native  
 **Test:** Log "Firebase initialized" on app start
 
-- [ ] Install Firebase SDK: `npm install firebase` in frontend
-- [ ] Create `frontend/src/services/firebase.ts`:
+- [ ] ~~Install Firebase SDK: `npm install firebase` in frontend~~
+- [ ] ~~Create `frontend/src/services/firebase.ts`:~~
   - Initialize Firebase with config from Firebase Console
   - Export `auth` and `firestore` instances
-- [ ] Import and call initialization in `App.tsx`
-- [ ] Add Firebase config to `.env` or `app.json` extras
+- [ ] ~~Import and call initialization in `App.tsx`~~
+- [ ] ~~Add Firebase config to `.env` or `app.json` extras~~
 - [ ] Test: Log `firebase.app().name` to console
 
 **Dependencies:** 0.3, 0.4  
@@ -110,10 +110,10 @@
 **Goal:** Create shared type definitions  
 **Test:** Import types in multiple files without errors
 
-- [ ] Create `shared/types/index.ts` (copy from schema.md)
-- [ ] Export all interfaces: User, WordList, SRSState, ChatSession, Message, PastChat
-- [ ] Export enums/types: UserTier, PersonaId, SessionStatus, MessageRole
-- [ ] Add to `shared/tsconfig.json` for easy imports
+- [ ] ~~Create `shared/types/index.ts` (copy from schema.md)~~
+- [ ] ~~Export all interfaces: User, WordList, SRSState, ChatSession, Message, PastChat~~
+- [ ] ~~Export enums/types: UserTier, PersonaId, SessionStatus, MessageRole~~
+- [ ] ~~Add to `shared/tsconfig.json` for easy imports~~
 
 **Dependencies:** 0.1, 0.2  
 **Estimated time:** 15 min
@@ -124,10 +124,10 @@
 **Goal:** Create template word lists in Firestore  
 **Test:** View word lists in Firebase Console
 
-- [ ] Create script `backend/scripts/seedWordLists.ts`
-- [ ] Read word lists from `shared/config/wordLists.ts`
-- [ ] For each template list, create Firestore document with ID `template-{name}`
-- [ ] Set `isTemplate: true`, `userId: null`
+- [ ] ~~Create script `backend/scripts/seedWordLists.ts`~~
+- [ ] ~~Read word lists from `shared/config/wordLists.ts`~~
+- [ ] ~~For each template list, create Firestore document with ID `template-{name}`~~
+- [ ] ~~Set `isTemplate: true`, `userId: null`~~
 - [ ] Run script: `node seedWordLists.ts`
 - [ ] Verify in Firestore Console: 3 template word lists exist
 
@@ -140,13 +140,13 @@
 **Goal:** Create helper functions for Firestore reads  
 **Test:** Fetch a word list and log to console
 
-- [ ] Create `frontend/src/services/firestore.ts`
-- [ ] Implement functions:
+- [ ] ~~Create `frontend/src/services/firestore.ts`~~
+- [ ] ~~Implement functions:~~
   - `getUserProfile(userId: string): Promise<User | null>`
   - `getWordList(wordListId: string): Promise<WordList | null>`
   - `getTemplateWordLists(): Promise<WordList[]>`
-- [ ] Use Firebase SDK to query Firestore
-- [ ] Test: Call `getTemplateWordLists()` in App.tsx and log results
+- [ ] ~~Use Firebase SDK to query Firestore~~
+- [ ] ~~Test: Call `getTemplateWordLists()` in App.tsx and log results~~
 
 **Dependencies:** 0.5, 1.1, 1.2  
 **Estimated time:** 30 min
