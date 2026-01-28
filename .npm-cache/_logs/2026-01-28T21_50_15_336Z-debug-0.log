@@ -1,0 +1,21 @@
+0 verbose cli /usr/local/bin/node /usr/local/bin/npm
+1 info using npm@10.9.2
+2 info using node@v22.14.0
+3 silly config load:file:/usr/local/lib/node_modules/npm/npmrc
+4 silly config load:file:/private/var/folders/5j/6dyyp49n6hb4bg1n6806v0700000gn/T/.create-expo-app/template-cache/.npmrc
+5 silly config load:file:/Users/krishivsinghal/.npmrc
+6 silly config load:file:/usr/local/etc/npmrc
+7 verbose title npm pack expo-template-blank-typescript@latest
+8 verbose argv "pack" "expo-template-blank-typescript@latest" "--json"
+9 verbose logfile logs-max:10 dir:/Users/krishivsinghal/Desktop/Verbalist/.npm-cache/_logs/2026-01-28T21_50_15_336Z-
+10 verbose logfile /Users/krishivsinghal/Desktop/Verbalist/.npm-cache/_logs/2026-01-28T21_50_15_336Z-debug-0.log
+11 silly logfile done cleaning log files
+12 http cache https://registry.npmjs.org/expo-template-blank-typescript 9ms (cache hit)
+13 http cache https://registry.npmjs.org/expo-template-blank-typescript 3ms (cache hit)
+14 http cache https://registry.npmjs.org/expo-template-blank-typescript/-/expo-template-blank-typescript-54.0.43.tgz 0ms (cache hit)
+15 verbose cwd /private/var/folders/5j/6dyyp49n6hb4bg1n6806v0700000gn/T/.create-expo-app/template-cache
+16 verbose os Darwin 24.6.0
+17 verbose node v22.14.0
+18 verbose npm  v10.9.2
+19 verbose exit 0
+20 info ok
