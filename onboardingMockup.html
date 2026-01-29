@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verbalist - Final Onboarding Design</title>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@300;400;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Lapis Theme (Welcome Screen) */
+        .lapis {
+            --bg-primary: #F6F3E7;
+            --bg-secondary: #FAEBD7;
+            --accent-primary: #E3AF64;
+            --accent-secondary: #516AC8;
+            --accent-tertiary: #26428B;
+            --text-dark: #0F1939;
+        }
+
+        /* Obsidian Theme (Word List Selection) */
+        .obsidian {
+            --bg-primary: #202030;
+            --bg-secondary: #4C1050;
+            --accent-primary: #F392A0;
+            --accent-secondary: #3D34A5;
+            --text-light: #E3E3DC;
+            --text-muted: #BEBEC4;
+        }
+
+        /* Porcelain Theme (Custom List) */
+        .porcelain {
+            --bg-primary: #FBFAF5;
+            --bg-secondary: #EBDFD8;
+            --accent-primary: #BCBDE4;
+            --accent-secondary: #FEEEA5;
+            --accent-tertiary: #6C6D2F;
+            --text-dark: #18453B;
+        }
+
+        body {
+            font-family: 'Crimson Pro', serif;
+            overflow-x: hidden;
+            background: #000;
+        }
+
+        .screen {
+            width: 100%;
+            max-width: 430px;
+            height: 932px;
+            margin: 20px auto;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        /* Screen Number */
+        .screen-number {
+            position: absolute;
+            top: 60px;
+            right: 40px;
+            font-family: 'Crimson Pro', serif;
+            font-size: 14px;
+            opacity: 0.4;
+            letter-spacing: 0.2em;
+            font-weight: 600;
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        /* Welcome Screen (Lapis) */
+        .welcome {
+            background: var(--bg-primary);
+            color: var(--text-dark);
+            padding: 80px 40px 40px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .logo-section {
+            margin-bottom: 50px;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        .logo {
+            font-family: 'DM Serif Display', serif;
+            font-size: 56px;
+            margin-bottom: 6px;
+            letter-spacing: -0.02em;
+            color: var(--text-dark);
+        }
+
+        .version {
+            font-size: 13px;
+            color: var(--accent-secondary);
+            opacity: 0.6;
+            letter-spacing: 0.1em;
+            font-weight: 600;
+        }
+
+        .tagline {
+            font-size: 20px;
+            line-height: 1.5;
+            color: var(--accent-tertiary);
+            margin-bottom: 40px;
+            font-weight: 400;
+            animation: fadeInUp 0.8s ease-out 0.3s backwards;
+        }
+
+        .messages-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-bottom: 40px;
+            overflow: hidden;
+        }
+
+        .message-bubble {
+            background: white;
+            padding: 18px 22px;
+            border-radius: 20px;
+            box-shadow: 0 4px 12px rgba(15, 25, 57, 0.08);
+            animation: bubbleSlideIn 0.6s ease-out backwards;
+            border-left: 4px solid var(--accent-primary);
+        }
+
+        .message-bubble:nth-child(1) { animation-delay: 0.5s; }
+        .message-bubble:nth-child(2) { animation-delay: 0.7s; }
+        .message-bubble:nth-child(3) { animation-delay: 0.9s; }
+
+        .message-title {
+            font-family: 'DM Serif Display', serif;
+            font-size: 17px;
+            margin-bottom: 6px;
+            color: var(--text-dark);
+        }
+
+        .message-text {
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--accent-tertiary);
+            opacity: 0.9;
+        }
+
+        @keyframes bubbleSlideIn {
+            0% {
+                transform: translateX(-30px);
+                opacity: 0;
+            }
+            100% {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .cta-button {
+            width: 100%;
+            padding: 20px;
+            background: var(--accent-tertiary);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            font-family: 'DM Serif Display', serif;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            animation: fadeInUp 0.8s ease-out 1.1s backwards;
+            box-shadow: 0 4px 16px rgba(38, 66, 139, 0.2);
+        }
+
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(38, 66, 139, 0.3);
+        }
+
+        /* Word List Selection (Obsidian) */
+        .word-list-selection {
+            background: var(--bg-primary);
+            color: var(--text-light);
+            padding: 80px 40px 40px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .obsidian .screen-number {
+            color: var(--accent-primary);
+        }
+
+        .header {
+            margin-bottom: 30px;
+            animation: fadeInDown 0.6s ease-out;
+        }
+
+        .header h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 42px;
+            margin-bottom: 8px;
+            letter-spacing: -0.01em;
+            color: var(--text-light);
+        }
+
+        .header p {
+            font-size: 16px;
+            color: var(--text-muted);
+            font-weight: 300;
+        }
+
+        .list-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            flex: 1;
+            align-content: start;
+        }
+
+        .list-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(227, 227, 220, 0.1);
+            padding: 24px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            animation: scaleIn 0.5s ease-out backwards;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .list-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--accent-primary);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .list-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .list-card:nth-child(1) { animation-delay: 0.1s; }
+        .list-card:nth-child(2) { animation-delay: 0.2s; }
+        .list-card:nth-child(3) { animation-delay: 0.3s; }
+        .list-card:nth-child(4) { 
+            animation-delay: 0.4s;
+            grid-column: 1 / -1;
+            background: var(--bg-secondary);
+            border-color: var(--accent-secondary);
+        }
+
+        .list-card:hover {
+            transform: translateY(-4px);
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 24px rgba(243, 146, 160, 0.2);
+        }
+
+        .list-card:nth-child(4):hover {
+            background: #5d1463;
+        }
+
+        .list-card h3 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 18px;
+            margin-bottom: 8px;
+            font-weight: 400;
+            color: var(--text-light);
+        }
+
+        .list-card p {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.4;
+            margin-bottom: 14px;
+            flex: 1;
+        }
+
+        .word-count {
+            display: inline-block;
+            padding: 6px 14px;
+            background: rgba(243, 146, 160, 0.2);
+            color: var(--accent-primary);
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        /* Custom Word List (Porcelain) */
+        .custom-word-list {
+            background: var(--bg-primary);
+            color: var(--text-dark);
+            padding: 80px 40px 40px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .porcelain .screen-number {
+            color: var(--accent-tertiary);
+        }
+
+        .progress-container {
+            margin-bottom: 30px;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .progress-bar {
+            height: 6px;
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-tertiary), var(--accent-primary));
+            width: 0%;
+            border-radius: 10px;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .progress-fill.active {
+            width: 40%;
+        }
+
+        .progress-text {
+            font-size: 13px;
+            color: var(--accent-tertiary);
+            font-weight: 500;
+        }
+
+        .porcelain .header h1 {
+            color: var(--text-dark);
+        }
+
+        .porcelain .header p {
+            color: var(--accent-tertiary);
+            opacity: 0.8;
+        }
+
+        .input-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            margin-top: 20px;
+        }
+
+        textarea {
+            flex: 1;
+            background: white;
+            border: 2px solid var(--bg-secondary);
+            padding: 20px;
+            font-family: 'Crimson Pro', serif;
+            font-size: 16px;
+            color: var(--text-dark);
+            resize: none;
+            margin-bottom: 20px;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+            animation: fadeInUp 0.6s ease-out 0.3s backwards;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(188, 189, 228, 0.2);
+        }
+
+        textarea::placeholder {
+            color: var(--accent-tertiary);
+            opacity: 0.4;
+        }
+
+        .word-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            min-height: 60px;
+            animation: fadeInUp 0.6s ease-out 0.4s backwards;
+        }
+
+        .pill {
+            background: var(--accent-primary);
+            color: white;
+            padding: 10px 18px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            animation: pillPop 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55) backwards;
+            box-shadow: 0 2px 8px rgba(188, 189, 228, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .pill:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(188, 189, 228, 0.4);
+        }
+
+        @keyframes pillPop {
+            0% {
+                transform: scale(0);
+                opacity: 0;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .pill-remove {
+            cursor: pointer;
+            opacity: 0.7;
+            font-size: 16px;
+            transition: opacity 0.2s;
+        }
+
+        .pill-remove:hover {
+            opacity: 1;
+        }
+
+        .counter {
+            text-align: center;
+            font-size: 15px;
+            color: var(--accent-tertiary);
+            margin-bottom: 20px;
+            font-weight: 500;
+            animation: fadeIn 0.6s ease-out 0.5s backwards;
+        }
+
+        .counter strong {
+            color: var(--accent-tertiary);
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .porcelain .cta-button {
+            background: var(--accent-tertiary);
+            box-shadow: 0 4px 16px rgba(108, 109, 47, 0.2);
+        }
+
+        .porcelain .cta-button:hover {
+            box-shadow: 0 8px 24px rgba(108, 109, 47, 0.3);
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* Screen Selector */
+        .screen-selector {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px;
+            border-radius: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            display: flex;
+            gap: 8px;
+            z-index: 1000;
+        }
+
+        .screen-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-family: 'Crimson Pro', serif;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border-radius: 50%;
+            color: #666;
+        }
+
+        .screen-btn.active {
+            background: #0F1939;
+            color: white;
+        }
+
+        .screen-btn:hover:not(.active) {
+            background: rgba(15, 25, 57, 0.1);
+        }
+
+        .screens-container {
+            display: none;
+        }
+
+        .screens-container.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<div class="screen-selector">
+    <button class="screen-btn active" onclick="switchScreen(0)">01</button>
+    <button class="screen-btn" onclick="switchScreen(1)">02</button>
+    <button class="screen-btn" onclick="switchScreen(2)">03</button>
+</div>
+
+<!-- Screen 1: Welcome (Lapis Theme) -->
+<div class="screens-container active" id="screen-0">
+    <div class="screen welcome lapis">
+        <div class="screen-number">01</div>
+        
+        <div class="logo-section">
+            <div class="logo">Verbalist</div>
+            <div class="version">v1.0.0 — Beta</div>
+        </div>
+        
+        <div class="tagline">Learn vocabulary through real conversation. No flashcards. No drills. Just talk.</div>
+        
+        <div class="messages-container">
+            <div class="message-bubble">
+                <div class="message-title">Natural Dialogue</div>
+                <div class="message-text">Chat with AI that uses your target words organically, like texting a well-read friend</div>
+            </div>
+            
+            <div class="message-bubble">
+                <div class="message-title">Spaced Repetition</div>
+                <div class="message-text">Words reappear exactly when you need to review them, building lasting retention</div>
+            </div>
+            
+            <div class="message-bubble">
+                <div class="message-title">Contextual Learning</div>
+                <div class="message-text">Master not just definitions, but usage, connotation, and real-world application</div>
+            </div>
+        </div>
+        
+        <button class="cta-button" onclick="switchScreen(1)">Begin Your Journey</button>
+    </div>
+</div>
+
+<!-- Screen 2: Word List Selection (Obsidian Theme) -->
+<div class="screens-container" id="screen-1">
+    <div class="screen word-list-selection obsidian">
+        <div class="screen-number">02</div>
+        
+        <div class="header">
+            <h1>Select Word List</h1>
+            <p>Choose preset or create custom</p>
+        </div>
+        
+        <div class="list-grid">
+            <div class="list-card">
+                <div>
+                    <h3>General High-Level</h3>
+                    <p>Sophisticated vocabulary for everyday eloquence and professional discourse</p>
+                </div>
+                <div class="word-count">50 words</div>
+            </div>
+            
+            <div class="list-card">
+                <div>
+                    <h3>Literary & Rhetorical</h3>
+                    <p>The language of literature, criticism, and persuasive expression</p>
+                </div>
+                <div class="word-count">50 words</div>
+            </div>
+            
+            <div class="list-card">
+                <div>
+                    <h3>Politics & Public Life</h3>
+                    <p>Navigate discourse on governance, policy, and civic engagement</p>
+                </div>
+                <div class="word-count">50 words</div>
+            </div>
+            
+            <div class="list-card" onclick="switchScreen(2)">
+                <div>
+                    <h3>Create Custom List</h3>
+                    <p>Build your own vocabulary collection from any source</p>
+                </div>
+                <div class="word-count">Custom</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Screen 3: Custom Word List (Porcelain Theme) -->
+<div class="screens-container" id="screen-2">
+    <div class="screen custom-word-list porcelain">
+        <div class="screen-number">03</div>
+        
+        <div class="progress-container">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressBar"></div>
+            </div>
+            <div class="progress-text" id="progressText">Add at least 20 words to continue</div>
+        </div>
+        
+        <div class="header">
+            <h1>Your Collection</h1>
+            <p>Paste or type words to create your personalized learning list</p>
+        </div>
+        
+        <div class="input-section">
+            <textarea 
+                placeholder="ecclesiastical, magnanimous, ephemeral, ubiquitous, perfunctory..."
+                id="wordInput"
+                oninput="parseWords()"></textarea>
+            
+            <div class="word-pills" id="wordPills"></div>
+            
+            <div class="counter" id="counter">
+                <strong>0</strong> / 20 words minimum
+            </div>
+            
+            <button class="cta-button" id="doneBtn" style="opacity: 0.5; cursor: not-allowed;">
+                Start Learning
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function switchScreen(index) {
+        document.querySelectorAll('.screens-container').forEach((screen, i) => {
+            screen.classList.toggle('active', i === index);
+        });
+        
+        document.querySelectorAll('.screen-btn').forEach((btn, i) => {
+            btn.classList.toggle('active', i === index);
+        });
+
+        if (index === 2) {
+            setTimeout(() => {
+                document.getElementById('progressBar').classList.add('active');
+            }, 100);
+        }
+    }
+
+    let words = [];
+
+    function parseWords() {
+        const input = document.getElementById('wordInput').value;
+        const parsed = input
+            .toLowerCase()
+            .split(/[\s,;\n]+/)
+            .map(w => w.trim())
+            .filter(w => w.length > 0 && /^[a-z-]+$/.test(w));
+        
+        words = [...new Set(parsed)];
+        
+        updateWordPills();
+        updateCounter();
+        updateButton();
+        updateProgress();
+    }
+
+    function updateWordPills() {
+        const container = document.getElementById('wordPills');
+        container.innerHTML = words.slice(0, 15).map((word, i) => `
+            <div class="pill" style="animation-delay: ${i * 0.05}s">
+                ${word}
+                <span class="pill-remove" onclick="removeWord('${word}')">×</span>
+            </div>
+        `).join('');
+        
+        if (words.length > 15) {
+            container.innerHTML += `<div class="pill" style="opacity: 0.7">+${words.length - 15} more</div>`;
+        }
+    }
+
+    function removeWord(word) {
+        words = words.filter(w => w !== word);
+        updateWordPills();
+        updateCounter();
+        updateButton();
+        updateProgress();
+    }
+
+    function updateCounter() {
+        const counter = document.getElementById('counter');
+        counter.innerHTML = `<strong>${words.length}</strong> / 20 words minimum`;
+    }
+
+    function updateProgress() {
+        const progress = Math.min((words.length / 20) * 100, 100);
+        document.getElementById('progressBar').style.width = progress + '%';
+        
+        const progressText = document.getElementById('progressText');
+        if (words.length >= 20) {
+            progressText.textContent = "Ready to begin!";
+        } else {
+            progressText.textContent = `${20 - words.length} more word${20 - words.length !== 1 ? 's' : ''} needed`;
+        }
+    }
+
+    function updateButton() {
+        const btn = document.getElementById('doneBtn');
+        if (words.length >= 20) {
+            btn.textContent = 'Start Learning';
+            btn.style.opacity = '1';
+            btn.style.cursor = 'pointer';
+        } else {
+            btn.textContent = 'Start Learning';
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+        }
+    }
+</script>
+
+</body>
+</html>

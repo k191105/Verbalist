@@ -159,13 +159,13 @@
 **Goal:** Sign in users anonymously on app launch  
 **Test:** User is authenticated, userId logged to console
 
-- [ ] Create `frontend/src/services/auth.ts`
-- [ ] Implement `signInAnonymously()` using Firebase Auth
-- [ ] On success, create user document in Firestore if doesn't exist
-- [ ] Set default `activeWordListId` to `template-general`
-- [ ] Set `tier: 'free'`, `dailyUsageCount: 0`
-- [ ] Call auth function in `App.tsx` on mount
-- [ ] Log userId to console on success
+- [ ] ~~Create `frontend/src/services/auth.ts`~~
+- [ ] ~~Implement `signInAnonymously()` using Firebase Auth~~
+- [ ] ~~On success, create user document in Firestore if doesn't exist~~
+- [ ] ~~Set default `activeWordListId` to `template-general`~~
+- [ ] ~~Set `tier: 'free'`, `dailyUsageCount: 0`~~
+- [ ] ~~Call auth function in `App.tsx` on mount~~
+- [ ] ~~Log userId to console on success~~
 
 **Dependencies:** 0.5, 1.1  
 **Estimated time:** 30 min
@@ -176,15 +176,15 @@
 **Goal:** Provide user state across app  
 **Test:** Access user in any component via context
 
-- [ ] Create `frontend/src/hooks/useAuth.ts`
-- [ ] Implement AuthContext with:
+- [ ] ~~Create `frontend/src/hooks/useAuth.ts`~~
+- [ ] ~~Implement AuthContext with:~~
   - `user: User | null`
   - `loading: boolean`
   - `signIn()`, `signOut()` functions
-- [ ] Listen to Firebase Auth state changes
-- [ ] Fetch/update user profile from Firestore on auth change
-- [ ] Wrap `App.tsx` with `AuthProvider`
-- [ ] Test: Access `useAuth()` in a dummy component and log user
+- [ ] ~~Listen to Firebase Auth state changes~~
+- [ ] ~~Fetch/update user profile from Firestore on auth change~~
+- [ ] ~~Wrap `App.tsx` with `AuthProvider`~~
+- [ ] ~~Test: Access `useAuth()` in a dummy component and log user~~
 
 **Dependencies:** 2.1  
 **Estimated time:** 30 min
@@ -197,11 +197,11 @@
 **Goal:** First screen users see  
 **Test:** Navigate to WelcomeScreen, see static content
 
-- [ ] Create `frontend/src/screens/onboarding/WelcomeScreen.tsx`
-- [ ] Display app logo and welcome text
-- [ ] Add "Get Started" button
-- [ ] Button navigates to WordListSelectionScreen
-- [ ] Setup navigation stack with WelcomeScreen as first route
+- [x] ~~Create `frontend/src/screens/onboarding/WelcomeScreen.tsx`~~
+- [x] ~~Display app logo and welcome text~~
+- [x] ~~Add "Get Started" button~~
+- [x] ~~Button navigates to WordListSelectionScreen~~
+- [x] ~~Setup navigation stack with WelcomeScreen as first route~~
 
 **Dependencies:** 0.3, 2.2  
 **Estimated time:** 20 min
@@ -212,15 +212,15 @@
 **Goal:** Let users choose a word list  
 **Test:** See template word lists, tap one, continue to chat
 
-- [ ] Create `frontend/src/screens/onboarding/WordListSelectionScreen.tsx`
-- [ ] Fetch template word lists using `getTemplateWordLists()`
-- [ ] Display as list with title, description, word count
-- [ ] Add button for "Create Custom List"
-- [ ] On template selection:
-  - Update user's `activeWordListId` in Firestore
-  - Navigate to ChatScreen
-- [ ] On "Create Custom List":
-  - Navigate to CustomWordListScreen
+- [x] ~~Create `frontend/src/screens/onboarding/WordListSelectionScreen.tsx`~~
+- [x] ~~Fetch template word lists using `getTemplateWordLists()`~~
+- [x] ~~Display as list with title, description, word count~~
+- [x] ~~Add button for "Create Custom List"~~
+- [x] ~~On template selection:~~
+  - ~~Update user's `activeWordListId` in Firestore~~
+  - ~~Navigate to ChatScreen (via PresetDetailScreen)~~
+- [x] ~~On "Create Custom List":~~
+  - ~~Navigate to CustomWordListScreen~~
 
 **Dependencies:** 1.3, 3.1  
 **Estimated time:** 45 min
@@ -231,19 +231,19 @@
 **Goal:** Allow users to create custom word lists  
 **Test:** Paste words, see parsed pills, confirm list, navigate to chat
 
-- [ ] Create `frontend/src/screens/onboarding/CustomWordListScreen.tsx`
-- [ ] Large TextInput for pasting/typing words
-- [ ] Implement `frontend/src/utils/wordParser.ts`:
-  - Split by whitespace, newlines, commas
-  - Trim, lowercase, remove duplicates
-  - Return array of words
-- [ ] Display parsed words as pills/chips below input
-- [ ] Show progress bar: "X / 20 words minimum"
-- [ ] Disable "Done" button until minimum reached
-- [ ] On "Done":
-  - Create new WordList document in Firestore
-  - Set as user's `activeWordListId`
-  - Navigate to ChatScreen
+- [x] ~~Create `frontend/src/screens/onboarding/CustomWordListScreen.tsx`~~
+- [x] ~~Large TextInput for pasting/typing words~~
+- [x] ~~Implement `frontend/src/utils/wordValidator.ts`:~~
+  - ~~Split by whitespace, newlines, commas~~
+  - ~~Trim, lowercase, remove duplicates~~
+  - ~~Return array of words~~
+- [x] ~~Display parsed words as list with validation~~
+- [x] ~~Show progress bar: "X / 20 words minimum"~~
+- [x] ~~Disable "Done" button until minimum reached~~
+- [x] ~~On "Done":~~
+  - ~~Create new WordList document in Firestore~~
+  - ~~Set as user's `activeWordListId`~~
+  - ~~Navigate to ChatScreen~~
 
 **Dependencies:** 3.2, 1.3  
 **Estimated time:** 60 min
