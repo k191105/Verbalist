@@ -6,6 +6,7 @@ import WordListSelectionScreen from "../screens/onboarding/WordListSelectionScre
 import CustomWordListScreen from "../screens/onboarding/CustomWordListScreen";
 import PresetDetailScreen from "../screens/onboarding/PresetDetailScreen";
 import AccountSetupScreen from "../screens/onboarding/AccountSetupScreen";
+import ChatScreen from "../screens/chat/ChatScreen";
 import { useTheme } from "../hooks/useTheme";
 import { THEMES } from "../config/theme";
 
@@ -50,17 +51,8 @@ export default function RootNavigator() {
         <Stack.Screen name="CustomWordList" component={CustomWordListScreen} />
         <Stack.Screen name="PresetDetail" component={PresetDetailScreen} />
         <Stack.Screen name="AccountSetup" component={AccountSetupScreen} />
+        <Stack.Screen name="Chat" component={ChatScreen} />
         {/* Placeholder screens - will be implemented in future tasks */}
-        <Stack.Screen
-          name="Chat"
-          component={PlaceholderScreen}
-          options={{
-            headerShown: true,
-            title: "Chat",
-            headerStyle: { backgroundColor: THEMES.lapis.background },
-            headerTintColor: THEMES.lapis.text,
-          }}
-        />
         <Stack.Screen
           name="Dashboard"
           component={PlaceholderScreen}

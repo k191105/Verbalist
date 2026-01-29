@@ -46,35 +46,3 @@ Usage limits are enforced at the session level. Free users can complete up to tw
 
 
 Notifications delivered once a day with something like 'Chris sent you a message' or similar; tapping takes user into the chat. Stack would involve React Native likely Expo, Firebase, RevenueCat, OpenAI API (for now) - later also Claude maybe for Gemma persona (only if economics works out). Using LLM for selecting bag of words - use cheapest LLM for this, then another cheap LLM for chat, maybe 4o-mini. Firebase has a generous free tier and is built for React Native and mobile apps. Pricing also better. Push notifications and mobile specific features also built in. In development cost should be nearly free other than LLM costs. 
-
-
-
-The first step is not feature work but structure. Begin by defining a clean repository with an explicit separation between frontend, backend, and shared configuration. Set up a React Native (likely Expo) project for the client, a backend service responsible for authentication, session management, and SRS logic, and a shared configuration layer containing all tunable constants (message limits, daily caps, word-bag sizes, theme palettes, persona definitions, premium/free features) and a secrets file to be filled in with relevant details (API keys etc.) 
-
-
-
-In parallel, define the data model in prose before code: users, word lists, words, chat sessions, messages, personas, and SRS state. This becomes the backbone for both Firestore (or equivalent) schema design and API contracts. At the same time, write the initial prompt templates for personas, including the opening message logic and word-injection constraints, as plain text artifacts.
-
-
-
-Once structure and data models are fixed, scaffold the app with placeholder screens: onboarding, word list selection, custom list creation, chat, dashboard, and settings. These can initially be static, navigable views without real logic. Only after navigation and layout are stable should you integrate ChatKit for the chat surface, followed by backend hooks for session creation and word-bag selection.
-
-
-
-From there, development proceeds vertically: one complete path from app launch → onboarding → first chat → session completion, fully wired and testable, before expanding into personas, limits, monetization, and polish.
-
-
-
-Here's what I need from you: all this in mind and any further clarifications, questions, ideas, opportunities in mind, generate the following files
-
-
-
-Give me the full architecture: - File + folder structure - What each part does - Where state lives, how services connect Format this entire document in markdown.”  Save its output as architecture.md - this should be fairly small, but contain a minimum tree structure for the app. 
-
-
-
-Then, using that architecture, write a granular step-by-step plan to build the product, with a clear line for where MVP will be ready. Each task should: - Be incredibly small + testable - Have a clear start + end - Focus on one concern I’ll be passing this off to an engineering LLM that will be told to complete one task at a time, allowing me to test in between. Think very careful about the best order of operations here. Save it as tasks.md. 
-
-
-
-A schema.md for the data structure. (e.g., User {id, name, level}, Word {id, text, srs_bucket, last_reviewed}, Chat {id, persona, messages[]}) 

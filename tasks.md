@@ -264,42 +264,89 @@
 
 ---
 
+### 3.5 Create AccountSetupScreen
+**Goal:** Final onboarding step for user profile setup  
+**Test:** Navigate to AccountSetupScreen, enter name, proceed to chat
+
+- [x] ~~Create `frontend/src/screens/onboarding/AccountSetupScreen.tsx`~~
+- [x] ~~Display name input field~~
+- [x] ~~Add sign-in options placeholder (Coming Soon card)~~
+- [x] ~~Save name to Firestore on continue~~
+- [x] ~~Add "Skip for now" option~~
+- [x] ~~Navigate to Chat on complete~~
+- [x] ~~Use Lapis theme (themes cycle)~~
+
+**Dependencies:** 3.3  
+**Estimated time:** 30 min
+
+---
+
+### 3.6 Create PresetDetailScreen with Edit Mode
+**Goal:** View and optionally edit preset word lists  
+**Test:** View preset words, edit to create custom list
+
+- [x] ~~Create `frontend/src/screens/onboarding/PresetDetailScreen.tsx`~~
+- [x] ~~Display all words from preset in scrollable list~~
+- [x] ~~Add "Edit" button to enable editing mode~~
+- [x] ~~In edit mode: show text input, delete buttons on words~~
+- [x] ~~On edit: create custom list instead of using preset~~
+- [x] ~~Navigate to AccountSetupScreen on continue~~
+
+**Dependencies:** 3.2  
+**Estimated time:** 45 min
+
+---
+
 ## Phase 4: Chat UI (Frontend Only, No Backend Yet)
 
-### 4.1 Create ChatScreen with Mock Data
-**Goal:** Display chat interface with hardcoded messages  
-**Test:** See iMessage-style chat with bubbles
+### 4.1 Create ChatScreen with Custom UI
+**Goal:** Display custom chat interface with iMessage-style bubbles  
+**Test:** See iMessage-style chat with mock messages, send new messages
 
-- [ ] Create `frontend/src/screens/chat/ChatScreen.tsx`
-- [ ] Install and import `react-native-gifted-chat`
-- [ ] Setup GiftedChat component with mock messages array
-- [ ] Style to look like iMessage:
-  - User messages on right (blue)
-  - AI messages on left (gray)
-  - No avatars
-  - Timestamps
-- [ ] Add back button in header (navigate to Dashboard)
-- [ ] Test: Send message, see it appear in chat
+- [x] ~~Create `frontend/src/screens/chat/ChatScreen.tsx`~~
+- [x] ~~Build custom chat UI (not gifted-chat) with:~~
+  - ~~FlatList for messages~~
+  - ~~Message bubble component with tails~~
+  - ~~User messages on right (blue #007AFF)~~
+  - ~~AI messages on left (gray #E5E5EA)~~
+  - ~~Date separators~~
+  - ~~Timestamps for message groups~~
+  - ~~Target word highlighting (bold)~~
+- [x] ~~Create header with:~~
+  - ~~Back button (navigate to Dashboard)~~
+  - ~~Persona name (tappable)~~
+  - ~~Word list subtitle~~
+  - ~~More options button~~
+- [x] ~~Create input area with:~~
+  - ~~Word bag button (left)~~
+  - ~~Auto-growing TextInput~~
+  - ~~Send button (right)~~
+- [x] ~~Add typing indicator component~~
+- [x] ~~Test: Send message, see it appear in chat~~
 
 **Dependencies:** 0.3  
-**Estimated time:** 45 min
+**Estimated time:** 90 min
 
 ---
 
 ### 4.2 Add Word Bag Overlay Component
 **Goal:** Show current target words on demand  
-**Test:** Tap button, see overlay with 3-5 words
+**Test:** Tap word bag button, see island with words and confidence bars
 
-- [ ] Create `frontend/src/components/WordBagOverlay.tsx`
-- [ ] Accept `words: string[]` and `onClose: () => void` props
-- [ ] Display as modal/bottom sheet with list of words
-- [ ] Each word styled with confidence indicator (placeholder for now)
-- [ ] Add "X" button to close overlay
-- [ ] In ChatScreen, add button near input to show overlay
-- [ ] Pass mock word bag to overlay
+- [x] ~~Create `frontend/src/components/WordBagOverlay.tsx`~~
+- [x] ~~Accept `words: WordBagItem[]` and `visible: boolean` props~~
+- [x] ~~Display as floating island above input:~~
+  - ~~Slide-up animation~~
+  - ~~Arrow pointing to button~~
+  - ~~Word list with confidence bars~~
+- [x] ~~Each word shows:~~
+  - ~~Word text~~
+  - ~~Confidence bar (visual progress)~~
+- [x] ~~Tap outside to close~~
+- [x] ~~In ChatScreen, toggle overlay on word bag button press~~
 
 **Dependencies:** 4.1  
-**Estimated time:** 30 min
+**Estimated time:** 45 min
 
 ---
 
@@ -307,11 +354,12 @@
 **Goal:** Long-press any word in chat to add to word list  
 **Test:** Long-press word, see action sheet, tap "Add to Word List"
 
-- [ ] In ChatScreen, handle onLongPress on message text
-- [ ] Extract word at press location (use built-in Gifted Chat props if available)
-- [ ] Show action sheet with "Add to Word List" option
-- [ ] On confirm, log word to console (no backend yet)
-- [ ] Show success toast: "{word} added to your list"
+- [x] ~~In ChatScreen, handle onLongPress on message text~~
+- [x] ~~Extract words from message (4+ letter words)~~
+- [x] ~~Show action sheet with "Add to Word List" options~~
+- [x] ~~On confirm, log word to console (no backend yet)~~
+- [x] ~~Show success toast: "{word} added to your list"~~
+- [x] ~~Add haptic feedback (expo-haptics)~~
 
 **Dependencies:** 4.1  
 **Estimated time:** 30 min

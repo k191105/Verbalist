@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verbalist - Chat Screen</title>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@300;400;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #F6F3E7;
+            --accent-blue: #007AFF;
+            --bubble-gray: #E5E5EA;
+            --text-dark: #0F1939;
+            --text-gray: #8E8E93;
+            --white: #FFFFFF;
+        }
+
+        body {
+            font-family: 'Crimson Pro', serif;
+            background: #000;
+        }
+
+        .screen {
+            width: 430px;
+            height: 932px;
+            margin: 20px auto;
+            background: var(--bg-primary);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        /* Header */
+        .chat-header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 60px 16px 12px;
+            border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .header-top {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .back-button {
+            color: var(--accent-blue);
+            font-size: 32px;
+            font-weight: 300;
+            cursor: pointer;
+            padding: 0 8px;
+            margin-right: 8px;
+        }
+
+        .persona-info {
+            flex: 1;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .persona-name {
+            font-family: 'DM Serif Display', serif;
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 2px;
+        }
+
+        .persona-subtitle {
+            font-size: 12px;
+            color: var(--text-gray);
+        }
+
+        .more-button {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--accent-blue);
+            font-size: 20px;
+        }
+
+        /* Messages Area */
+        .messages-area {
+            height: calc(932px - 160px);
+            overflow-y: auto;
+            padding: 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .date-separator {
+            text-align: center;
+            margin: 16px 0;
+            font-size: 13px;
+            color: var(--text-gray);
+            font-weight: 400;
+        }
+
+        .message-group {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-bottom: 8px;
+        }
+
+        .message-group.user {
+            align-items: flex-end;
+        }
+
+        .message-group.assistant {
+            align-items: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 70%;
+            padding: 8px 14px;
+            font-size: 16px;
+            line-height: 1.4;
+            position: relative;
+            animation: messageSlideIn 0.3s ease-out;
+        }
+
+        /* AI Bubble (left) */
+        .message-group.assistant .message-bubble {
+            background: var(--bubble-gray);
+            color: var(--text-dark);
+            border-radius: 18px;
+            border-bottom-left-radius: 4px;
+        }
+
+        /* User Bubble (right) */
+        .message-group.user .message-bubble {
+            background: var(--accent-blue);
+            color: white;
+            border-radius: 18px;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message-bubble strong {
+            font-weight: 600;
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: var(--text-gray);
+            margin-top: 2px;
+            padding: 0 4px;
+        }
+
+        /* Typing Indicator */
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: 10px 14px;
+            background: var(--bubble-gray);
+            border-radius: 18px;
+            border-bottom-left-radius: 4px;
+            width: fit-content;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-gray);
+            animation: typingBounce 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typingBounce {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
+            30% { transform: translateY(-6px); opacity: 1; }
+        }
+
+        /* Input Area */
+        .input-area {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 8px 8px 32px;
+            border-top: 0.5px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .input-container {
+            display: flex;
+            align-items: flex-end;
+            gap: 8px;
+            background: white;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 20px;
+            padding: 6px;
+        }
+
+        .word-bag-button {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent-blue);
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .message-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            font-family: 'Crimson Pro', serif;
+            font-size: 16px;
+            color: var(--text-dark);
+            resize: none;
+            min-height: 32px;
+            max-height: 120px;
+            padding: 6px 8px;
+        }
+
+        .message-input:focus {
+            outline: none;
+        }
+
+        .message-input::placeholder {
+            color: var(--text-gray);
+        }
+
+        .send-button {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            border: none;
+            color: white;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .send-button:disabled {
+            background: rgba(0, 122, 255, 0.3);
+            cursor: not-allowed;
+        }
+
+        /* Word Bag Island */
+        .word-bag-island {
+            position: absolute;
+            bottom: 80px;
+            left: 16px;
+            background: white;
+            border-radius: 16px;
+            padding: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+            min-width: 200px;
+            display: none;
+            animation: islandSlideUp 0.3s ease-out;
+        }
+
+        .word-bag-island.active {
+            display: block;
+        }
+
+        .island-arrow {
+            position: absolute;
+            bottom: -6px;
+            left: 20px;
+            width: 12px;
+            height: 12px;
+            background: white;
+            transform: rotate(45deg);
+        }
+
+        .word-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .word-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            background: var(--bg-primary);
+            border-radius: 10px;
+        }
+
+        .word-text {
+            font-family: 'DM Serif Display', serif;
+            font-size: 15px;
+            color: var(--text-dark);
+        }
+
+        .confidence-bar {
+            width: 40px;
+            height: 4px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: var(--accent-blue);
+            border-radius: 2px;
+        }
+
+        @keyframes messageSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes islandSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="screen">
+    <!-- Header -->
+    <div class="chat-header">
+        <div class="header-top">
+            <div class="back-button">‹</div>
+            <div class="persona-info" onclick="alert('Show persona info modal')">
+                <div class="persona-name">Chris</div>
+                <div class="persona-subtitle">General High-Level</div>
+            </div>
+            <div class="more-button">•••</div>
+        </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="messages-area">
+        <div class="date-separator">Thursday, January 29</div>
+
+        <div class="message-group assistant">
+            <div class="message-bubble">
+                Hey! Ready to explore some new vocabulary? Technology has become so <strong>ubiquitous</strong> in our daily lives.
+            </div>
+            <div class="message-time">2:14 PM</div>
+        </div>
+
+        <div class="message-group user">
+            <div class="message-bubble">
+                Yeah, it really has! Sometimes I feel like I can't escape it.
+            </div>
+            <div class="message-time">2:15 PM</div>
+        </div>
+
+        <div class="message-group assistant">
+            <div class="message-bubble">
+                That's such a <strong>pervasive</strong> feeling these days.
+            </div>
+            <div class="message-bubble">
+                The constant connectivity can be empowering and overwhelming. Do you think there's value in being more <strong>judicious</strong> about our tech use?
+            </div>
+            <div class="message-time">2:15 PM</div>
+        </div>
+
+        <div class="message-group user">
+            <div class="message-bubble">
+                Definitely. I try to be more intentional about when I check my phone now.
+            </div>
+            <div class="message-time">2:16 PM</div>
+        </div>
+
+        <div class="message-group assistant">
+            <div class="typing-indicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Input Area -->
+    <div class="input-area">
+        <div class="input-container">
+            <button class="word-bag-button" onclick="toggleWordBag()">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <path d="M4 6h12M4 10h12M4 14h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+            </button>
+            <textarea class="message-input" placeholder="Message" rows="1"></textarea>
+            <button class="send-button">↑</button>
+        </div>
+    </div>
+
+    <!-- Word Bag Island -->
+    <div class="word-bag-island" id="wordBagIsland">
+        <div class="island-arrow"></div>
+        <div class="word-list">
+            <div class="word-item">
+                <div class="word-text">ubiquitous</div>
+                <div class="confidence-bar">
+                    <div class="confidence-fill" style="width: 80%;"></div>
+                </div>
+            </div>
+            <div class="word-item">
+                <div class="word-text">pervasive</div>
+                <div class="confidence-bar">
+                    <div class="confidence-fill" style="width: 60%;"></div>
+                </div>
+            </div>
+            <div class="word-item">
+                <div class="word-text">judicious</div>
+                <div class="confidence-bar">
+                    <div class="confidence-fill" style="width: 45%;"></div>
+                </div>
+            </div>
+            <div class="word-item">
+                <div class="word-text">ephemeral</div>
+                <div class="confidence-bar">
+                    <div class="confidence-fill" style="width: 20%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleWordBag() {
+        document.getElementById('wordBagIsland').classList.toggle('active');
+    }
+
+    // Close island when clicking outside
+    document.addEventListener('click', (e) => {
+        const island = document.getElementById('wordBagIsland');
+        const button = document.querySelector('.word-bag-button');
+        if (island.classList.contains('active') && 
+            !island.contains(e.target) && 
+            !button.contains(e.target)) {
+            island.classList.remove('active');
+        }
+    });
+
+    // Auto-grow textarea
+    const textarea = document.querySelector('.message-input');
+    textarea.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+</script>
+
+</body>
+</html>

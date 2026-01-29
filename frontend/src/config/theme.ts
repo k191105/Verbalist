@@ -18,10 +18,10 @@ export interface ThemeColors {
   accentTertiary: string;
 
   // Chat colors
-  bubbleUser: string;
-  bubbleUserText: string;
-  bubbleAssistant: string;
-  bubbleAssistantText: string;
+  bubbleSent: string;        // User messages (right side)
+  bubbleSentText: string;
+  bubbleReceived: string;    // AI messages (left side)
+  bubbleReceivedText: string;
   bubbleBorder: string;
 
   // UI elements
@@ -57,11 +57,11 @@ const lapis: ThemeColors = {
   accentTertiary: "#26428B",  // Blue Oblivion
 
   // Chat
-  bubbleUser: "#26428B",
-  bubbleUserText: "#FFFFFF",
-  bubbleAssistant: "#FFFFFF",
-  bubbleAssistantText: "#0F1939",
-  bubbleBorder: "#E3AF64",    // Caramel left border
+  bubbleSent: "#26428B",      // Blue Oblivion - user messages
+  bubbleSentText: "#FFFFFF",
+  bubbleReceived: "#FFFFFF",  // White - AI messages (matches onboarding)
+  bubbleReceivedText: "#0F1939",
+  bubbleBorder: "#E3AF64",
 
   // UI
   border: "#E3AF64",
@@ -96,10 +96,10 @@ const obsidian: ThemeColors = {
   accentTertiary: "#4C1050",  // Shani Purple
 
   // Chat
-  bubbleUser: "#4C1050",
-  bubbleUserText: "#E3E3DC",
-  bubbleAssistant: "rgba(255, 255, 255, 0.05)",
-  bubbleAssistantText: "#E3E3DC",
+  bubbleSent: "#4C1050",      // Shani Purple - user messages
+  bubbleSentText: "#E3E3DC",
+  bubbleReceived: "rgba(255, 255, 255, 0.08)",
+  bubbleReceivedText: "#E3E3DC",
   bubbleBorder: "#F392A0",
 
   // UI
@@ -135,10 +135,10 @@ const porcelain: ThemeColors = {
   accentTertiary: "#6C6D2F",  // Safari Green
 
   // Chat
-  bubbleUser: "#6C6D2F",
-  bubbleUserText: "#FFFFFF",
-  bubbleAssistant: "#FFFFFF",
-  bubbleAssistantText: "#18453B",
+  bubbleSent: "#6C6D2F",      // Safari Green - user messages
+  bubbleSentText: "#FFFFFF",
+  bubbleReceived: "#FFFFFF",  // White - AI messages
+  bubbleReceivedText: "#18453B",
   bubbleBorder: "#BCBDE4",
 
   // UI
