@@ -413,7 +413,7 @@
 - [ ] Implement `generateChatResponse(persona, context, wordBag)`:
   - Build system prompt from persona definition
   - Include instructions to use words from word bag naturally
-  - Use gpt-4o-mini model
+  - Use cheapest model possible for testing (gpt-5-nano); store models in constant file for easy modification later.
   - Max tokens: 150
 - [ ] Return response text
 - [ ] Test: Call function with test prompt, log response

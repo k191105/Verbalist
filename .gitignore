@@ -13,6 +13,7 @@ build/
 coverage/
 
 backend/serviceAccountKey.json
+backend/scripts/serviceAccountKey.json
 shared/secrets.ts
 
 .env
