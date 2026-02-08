@@ -13,13 +13,16 @@ import {
   StatusBar,
   Alert,
   Pressable,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/RootNavigator";
 import { useTheme } from "../../hooks/useTheme";
+import { useAuth } from "../../hooks/useAuth";
 import WordBagOverlay from "../../components/WordBagOverlay";
+import { startChatSession, sendUserMessage } from "../../services/chat";
 
 type ChatScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, "Chat">;
@@ -38,49 +41,21 @@ interface WordBagItem {
   confidence: number;
 }
 
-// Mock data
-const MOCK_MESSAGES: Message[] = [
-  {
-    id: "1",
-    role: "assistant",
-    content: "Hey! Ready to explore some new vocabulary? Technology has become so ubiquitous in our daily lives.",
-    timestamp: new Date(Date.now() - 5 * 60000),
-    wordUsage: ["ubiquitous"],
-  },
-  {
-    id: "2",
-    role: "user",
-    content: "Yeah, it really has! Sometimes I feel like I can't escape it.",
-    timestamp: new Date(Date.now() - 4 * 60000),
-  },
-  {
-    id: "3",
-    role: "assistant",
-    content: "That's such a pervasive feeling these days.",
-    timestamp: new Date(Date.now() - 3 * 60000),
-    wordUsage: ["pervasive"],
-  },
-  {
-    id: "4",
-    role: "assistant",
-    content: "The constant connectivity can be empowering and overwhelming. Do you think there's value in being more judicious about our tech use?",
-    timestamp: new Date(Date.now() - 3 * 60000),
-    wordUsage: ["judicious"],
-  },
-  {
-    id: "5",
-    role: "user",
-    content: "Definitely. I try to be more intentional about when I check my phone now.",
-    timestamp: new Date(Date.now() - 2 * 60000),
-  },
-];
+interface BackendWordBagItem {
+  word: string;
+  targetUseCount: number;
+  currentUseCount: number;
+}
 
-const MOCK_WORD_BAG: WordBagItem[] = [
-  { word: "ubiquitous", confidence: 0.8 },
-  { word: "pervasive", confidence: 0.6 },
-  { word: "judicious", confidence: 0.45 },
-  { word: "ephemeral", confidence: 0.2 },
-];
+/** Convert backend word bag to display format */
+function toDisplayWordBag(items: BackendWordBagItem[]): WordBagItem[] {
+  return items.map((item) => ({
+    word: item.word,
+    confidence: item.targetUseCount > 0
+      ? item.currentUseCount / item.targetUseCount
+      : 0,
+  }));
+}
 
 // Toast component for success message
 function Toast({ visible, message, theme }: { visible: boolean; message: string; theme: any }) {
@@ -268,14 +243,66 @@ function TimeStamp({ timestamp, isUser, theme }: { timestamp: Date; isUser: bool
 export default function ChatScreen({ navigation }: ChatScreenProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
+  const { user } = useAuth();
+
+  // Session state
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [wordBag, setWordBag] = useState<WordBagItem[]>([]);
+  const [backendWordBag, setBackendWordBag] = useState<BackendWordBagItem[]>([]);
+  const [sessionStatus, setSessionStatus] = useState<"active" | "complete">("active");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Chat state
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [inputHeight, setInputHeight] = useState(36);
   const [showWordBag, setShowWordBag] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+
+  // Initialize chat session on mount
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+
+    async function initSession() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const result = await startChatSession("chris", user!.activeWordListId);
+
+        if (cancelled) return;
+
+        setSessionId(result.sessionId);
+        setBackendWordBag(result.wordBag);
+        setWordBag(toDisplayWordBag(result.wordBag));
+
+        // Display the first message from the AI
+        const firstMsg: Message = {
+          id: "first-" + Date.now(),
+          role: "assistant",
+          content: result.firstMessage,
+          timestamp: new Date(),
+        };
+        setMessages([firstMsg]);
+      } catch (err) {
+        if (cancelled) return;
+        console.error("Failed to create session:", err);
+        setError("Couldn't start the conversation. Tap to retry.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    initSession();
+    return () => { cancelled = true; };
+  }, [user]);
 
   const showSuccessToast = (message: string) => {
     setToastMessage(message);
@@ -290,37 +317,55 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
     showSuccessToast(`"${word}" added to your list`);
   };
 
-  const handleSend = useCallback(() => {
-    if (!inputText.trim()) return;
+  const handleSend = useCallback(async () => {
+    if (!inputText.trim() || !sessionId || isSending || sessionStatus === "complete") return;
 
+    const text = inputText.trim();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
+    // Optimistic UI: add user message immediately
+    const userMsg: Message = {
+      id: "user-" + Date.now(),
       role: "user",
-      content: inputText.trim(),
+      content: text,
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, newMessage]);
+    setMessages((prev) => [...prev, userMsg]);
     setInputText("");
     setInputHeight(36);
     Keyboard.dismiss();
 
-    // Simulate AI typing and response
+    // Show typing indicator while waiting for AI
     setIsTyping(true);
-    setTimeout(() => {
-      setIsTyping(false);
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
+    setIsSending(true);
+
+    try {
+      const result = await sendUserMessage(sessionId, text);
+
+      // Add AI response
+      const aiMsg: Message = {
+        id: "ai-" + Date.now(),
         role: "assistant",
-        content: "That's an interesting thought! The ephemeral nature of our digital interactions is fascinating. Each moment online feels transient, yet leaves a lasting impact on our attention spans.",
+        content: result.aiMessage,
         timestamp: new Date(),
-        wordUsage: ["ephemeral"],
       };
-      setMessages((prev) => [...prev, aiResponse]);
-    }, 2000);
-  }, [inputText]);
+
+      setMessages((prev) => [...prev, aiMsg]);
+
+      // Update word bag and session status
+      setBackendWordBag(result.updatedWordBag);
+      setWordBag(toDisplayWordBag(result.updatedWordBag));
+      setSessionStatus(result.sessionStatus);
+    } catch (err) {
+      console.error("Failed to send message:", err);
+      // Show error toast but keep the user's message visible
+      showSuccessToast("Couldn't get a response. Try again.");
+    } finally {
+      setIsTyping(false);
+      setIsSending(false);
+    }
+  }, [inputText, sessionId, isSending, sessionStatus]);
 
   const handleContentSizeChange = (event: any) => {
     const newHeight = Math.min(Math.max(36, event.nativeEvent.contentSize.height), 120);
@@ -334,7 +379,6 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
 
   const handleSettings = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // TODO: Open settings sheet
     console.log("Settings pressed");
   };
 
@@ -343,7 +387,32 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
     setShowWordBag(!showWordBag);
   };
 
-  // Group messages by sender and add timestamps
+  const handleRetry = () => {
+    setError(null);
+    setLoading(true);
+    if (!user) return;
+    startChatSession("chris", user.activeWordListId)
+      .then((result) => {
+        setSessionId(result.sessionId);
+        setBackendWordBag(result.wordBag);
+        setWordBag(toDisplayWordBag(result.wordBag));
+        const firstMsg: Message = {
+          id: "first-" + Date.now(),
+          role: "assistant",
+          content: result.firstMessage,
+          timestamp: new Date(),
+        };
+        setMessages([firstMsg]);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Retry failed:", err);
+        setError("Couldn't start the conversation. Tap to retry.");
+        setLoading(false);
+      });
+  };
+
+  // Render message items
   const renderItem = ({ item, index }: { item: Message; index: number }) => {
     const prevMessage = index > 0 ? messages[index - 1] : null;
     const nextMessage = index < messages.length - 1 ? messages[index + 1] : null;
@@ -366,6 +435,31 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
     );
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centered, { backgroundColor: theme.background }]}>
+        <StatusBar barStyle="dark-content" />
+        <ActivityIndicator size="large" color={theme.accent} />
+        <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
+          Starting conversation...
+        </Text>
+      </View>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <View style={[styles.container, styles.centered, { backgroundColor: theme.background }]}>
+        <StatusBar barStyle="dark-content" />
+        <TouchableOpacity onPress={handleRetry}>
+          <Text style={[styles.errorText, { color: theme.textSecondary }]}>{error}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar barStyle="dark-content" />
@@ -373,7 +467,7 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
       {/* Toast */}
       <Toast visible={showToast} message={toastMessage} theme={theme} />
 
-      {/* Header - extends behind status bar */}
+      {/* Header */}
       <View style={[styles.headerContainer, { paddingTop: insets.top, backgroundColor: theme.surface }]}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={handleBack}>
@@ -417,56 +511,73 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
 
         {/* Word Bag Overlay */}
         <WordBagOverlay
-          words={MOCK_WORD_BAG}
+          words={wordBag}
           visible={showWordBag}
           onClose={() => setShowWordBag(false)}
           theme={theme}
         />
 
-        {/* Input Area */}
-        <View style={[
-          styles.inputArea, 
-          { 
-            backgroundColor: theme.surface,
-            paddingBottom: Math.max(insets.bottom, 12),
-            borderTopColor: theme.border,
-          }
-        ]}>
-          <View style={[styles.inputContainer, { backgroundColor: theme.inputBackground, borderColor: theme.border }]}>
-            <TouchableOpacity
-              style={styles.wordBagButton}
-              onPress={toggleWordBag}
-            >
-              <View style={styles.wordBagIcon}>
-                <View style={[styles.iconLine, { backgroundColor: theme.accent }]} />
-                <View style={[styles.iconLine, { backgroundColor: theme.accent }]} />
-                <View style={[styles.iconLine, { backgroundColor: theme.accent }]} />
-              </View>
-            </TouchableOpacity>
-
-            <TextInput
-              style={[styles.messageInput, { height: inputHeight, color: theme.text }]}
-              placeholder="Message"
-              placeholderTextColor={theme.textSecondary}
-              value={inputText}
-              onChangeText={setInputText}
-              multiline
-              onContentSizeChange={handleContentSizeChange}
-            />
-
-            <TouchableOpacity
-              style={[
-                styles.sendButton, 
-                { backgroundColor: theme.accent },
-                !inputText.trim() && styles.sendButtonDisabled
-              ]}
-              onPress={handleSend}
-              disabled={!inputText.trim()}
-            >
-              <Text style={styles.sendButtonText}>↑</Text>
+        {/* Session complete banner */}
+        {sessionStatus === "complete" && (
+          <View style={[styles.completeBanner, { backgroundColor: theme.accent }]}>
+            <Text style={[styles.completeBannerText, { color: theme.buttonText }]}>
+              Chat session complete!
+            </Text>
+            <TouchableOpacity onPress={handleBack}>
+              <Text style={[styles.completeBannerLink, { color: theme.buttonText }]}>
+                Return to Dashboard →
+              </Text>
             </TouchableOpacity>
           </View>
-        </View>
+        )}
+
+        {/* Input Area */}
+        {sessionStatus !== "complete" && (
+          <View style={[
+            styles.inputArea, 
+            { 
+              backgroundColor: theme.surface,
+              paddingBottom: Math.max(insets.bottom, 12),
+              borderTopColor: theme.border,
+            }
+          ]}>
+            <View style={[styles.inputContainer, { backgroundColor: theme.inputBackground, borderColor: theme.border }]}>
+              <TouchableOpacity
+                style={styles.wordBagButton}
+                onPress={toggleWordBag}
+              >
+                <View style={styles.wordBagIcon}>
+                  <View style={[styles.iconLine, { backgroundColor: theme.accent }]} />
+                  <View style={[styles.iconLine, { backgroundColor: theme.accent }]} />
+                  <View style={[styles.iconLine, { backgroundColor: theme.accent }]} />
+                </View>
+              </TouchableOpacity>
+
+              <TextInput
+                style={[styles.messageInput, { height: inputHeight, color: theme.text }]}
+                placeholder="Message"
+                placeholderTextColor={theme.textSecondary}
+                value={inputText}
+                onChangeText={setInputText}
+                multiline
+                onContentSizeChange={handleContentSizeChange}
+                editable={!isSending}
+              />
+
+              <TouchableOpacity
+                style={[
+                  styles.sendButton, 
+                  { backgroundColor: theme.accent },
+                  (!inputText.trim() || isSending) && styles.sendButtonDisabled
+                ]}
+                onPress={handleSend}
+                disabled={!inputText.trim() || isSending}
+              >
+                <Text style={styles.sendButtonText}>↑</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </KeyboardAvoidingView>
     </View>
   );
@@ -475,6 +586,34 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  centered: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+  },
+  errorText: {
+    fontSize: 16,
+    textAlign: "center",
+    paddingHorizontal: 32,
+  },
+  completeBanner: {
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    gap: 8,
+  },
+  completeBannerText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  completeBannerLink: {
+    fontSize: 14,
+    fontWeight: "500",
+    textDecorationLine: "underline",
   },
   toast: {
     position: "absolute",

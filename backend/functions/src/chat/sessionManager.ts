@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import { generateFirstMessage } from "../llm/openai";
 
 // Constants (inlined to avoid cross-directory import issues during build)
 const WORD_BAG_SIZE = {
@@ -101,8 +102,12 @@ export async function createSession(
 
   await sessionRef.set(session);
 
-  // Placeholder first message (OpenAI integration in 5.3)
-  const firstMessage = `Hey! I'd love to chat with you. What's on your mind today?`;
+  // Generate first message using OpenAI
+  const wordNames = wordBag.map((w) => w.word);
+  const firstMessage = await generateFirstMessage({
+    personaId,
+    wordBag: wordNames,
+  });
 
   // Store the first message
   const messageRef = db.collection("messages").doc();

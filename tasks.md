@@ -372,12 +372,12 @@
 **Goal:** Initialize Firebase Cloud Functions with TypeScript  
 **Test:** Deploy empty function, call it via HTTP
 
-- [ ] In `backend/functions/`, install dependencies:
-  - `firebase-functions`, `firebase-admin`, `openai`
-- [ ] Create `backend/functions/src/index.ts` as entry point
-- [ ] Create placeholder function `helloWorld` that returns "Hello"
-- [ ] Deploy: `firebase deploy --only functions`
-- [ ] Test: Call function URL in browser, see "Hello"
+- [x] ~~In `backend/functions/`, install dependencies:~~
+  - ~~`firebase-functions`, `firebase-admin`, `openai`~~
+- [x] ~~Create `backend/functions/src/index.ts` as entry point~~
+- [x] ~~Create placeholder function `helloWorld` that returns "Hello"~~
+- [x] ~~Deploy: `firebase deploy --only functions`~~
+- [x] ~~Test: Call function URL in browser, see "Hello"~~
 
 **Dependencies:** 0.4  
 **Estimated time:** 30 min
@@ -388,15 +388,15 @@
 **Goal:** Initialize chat session with word bag  
 **Test:** Call function, get session ID and first message back
 
-- [ ] Create `backend/functions/src/chat/sessionManager.ts`
-- [ ] Implement `createSession(userId, personaId, wordListId)`:
-  - Fetch user's active word list from Firestore
-  - Select 3-5 words for word bag (random for now, no SRS yet)
-  - Create ChatSession document in Firestore
-  - Generate first message using OpenAI API (see 5.3)
-  - Return `{ sessionId, wordBag, firstMessage }`
-- [ ] Export as callable Cloud Function in `index.ts`
-- [ ] Test with Postman/curl, verify session created in Firestore
+- [x] ~~Create `backend/functions/src/chat/sessionManager.ts`~~
+- [x] ~~Implement `createSession(userId, personaId, wordListId)`:~~
+  - ~~Fetch user's active word list from Firestore~~
+  - ~~Select 3-5 words for word bag (random for now, no SRS yet)~~
+  - ~~Create ChatSession document in Firestore~~
+  - ~~Generate first message using OpenAI API (see 5.3)~~
+  - ~~Return `{ sessionId, wordBag, firstMessage }`~~
+- [x] ~~Export as callable Cloud Function in `index.ts`~~
+- [x] ~~Test with Postman/curl, verify session created in Firestore~~
 
 **Dependencies:** 5.1, 1.1  
 **Estimated time:** 60 min
@@ -407,15 +407,15 @@
 **Goal:** Generate AI chat messages  
 **Test:** Pass prompt, get coherent response
 
-- [ ] Create `backend/functions/src/llm/openai.ts`
-- [ ] Store OpenAI API key in Firebase Functions config:
-  - `firebase functions:config:set openai.key="YOUR_KEY"`
-- [ ] Implement `generateChatResponse(persona, context, wordBag)`:
-  - Build system prompt from persona definition
-  - Include instructions to use words from word bag naturally
-  - Use cheapest model possible for testing (gpt-5-nano); store models in constant file for easy modification later.
-  - Max tokens: 150
-- [ ] Return response text
+- [x] ~~Create `backend/functions/src/llm/openai.ts`~~
+- [x] ~~Store OpenAI API key in Firebase Functions config:~~
+  - ~~`firebase functions:config:set openai.key="YOUR_KEY"`~~
+- [x] ~~Implement `generateChatResponse(persona, context, wordBag)`:~~
+  - ~~Build system prompt from persona definition~~
+  - ~~Include instructions to use words from word bag naturally~~
+  - ~~Use gpt-4o-mini for chat; store models in constant file for easy modification later.~~
+  - ~~Max tokens: 150~~
+- [x] ~~Return response text~~
 - [ ] Test: Call function with test prompt, log response
 
 **Dependencies:** 5.1, 0.2  
@@ -427,18 +427,18 @@
 **Goal:** Define system prompts for each persona  
 **Test:** Generate first message for each persona, verify style differences
 
-- [ ] Create `backend/functions/src/llm/prompts.ts`
-- [ ] Define prompt templates for:
-  - **Chris**: Friendly, versatile, everyday conversation
-  - **Gemma**: Literary, artistic, quotes from literature
-  - **Eva**: Philosophical, introspective, psychology-focused
-  - **Sid**: Historical, political, current events
-- [ ] Include instructions to:
-  - Use words from word bag naturally (3-5 times per conversation)
-  - Keep messages concise (2-3 sentences)
-  - Sound like texting a peer, not a tutor
-  - Avoid explicitly saying "let's use X word"
-- [ ] Include example first message for each persona
+- [x] ~~Create `backend/functions/src/llm/prompts.ts`~~
+- [x] ~~Define prompt templates for:~~
+  - ~~**Chris**: Friendly, versatile, everyday conversation~~
+  - ~~**Gemma**: Literary, artistic, quotes from literature~~
+  - ~~**Eva**: Philosophical, introspective, psychology-focused~~
+  - ~~**Sid**: Historical, political, current events~~
+- [x] ~~Include instructions to:~~
+  - ~~Use words from word bag naturally (3-5 times per conversation)~~
+  - ~~Keep messages concise (2-3 sentences)~~
+  - ~~Sound like texting a peer, not a tutor~~
+  - ~~Avoid explicitly saying "let's use X word"~~
+- [x] ~~Include first message prompt builder for each persona~~
 - [ ] Test: Generate first message for each persona using OpenAI
 
 **Dependencies:** 5.3, 0.2  
@@ -450,20 +450,20 @@
 **Goal:** Process user message and return AI response  
 **Test:** Send message via function, get response and updated session
 
-- [ ] Create `backend/functions/src/chat/messageHandler.ts`
-- [ ] Implement `sendMessage(sessionId, userMessage)`:
-  - Store user message in Firestore
-  - Fetch last N messages from session for context
-  - Detect if user used any words from word bag (simple string matching)
-  - Update `wordBag.currentUseCount` if word used
-  - Call OpenAI with context + persona prompt + word bag
-  - Store AI response in Firestore
-  - Increment `session.messageCount`
-  - Update `session.contextWindow` with new message IDs
-  - Check if session should complete (messageCount >= hard limit)
-  - If complete, mark session as complete
-  - Return `{ aiMessage, sessionStatus, updatedWordBag }`
-- [ ] Export as callable Cloud Function
+- [x] ~~Create `backend/functions/src/chat/messageHandler.ts`~~
+- [x] ~~Implement `sendMessage(sessionId, userMessage)`:~~
+  - ~~Store user message in Firestore~~
+  - ~~Fetch last N messages from session for context~~
+  - ~~Detect if user used any words from word bag (simple string matching)~~
+  - ~~Update `wordBag.currentUseCount` if word used~~
+  - ~~Call OpenAI with context + persona prompt + word bag~~
+  - ~~Store AI response in Firestore~~
+  - ~~Increment `session.messageCount`~~
+  - ~~Update `session.contextWindow` with new message IDs~~
+  - ~~Check if session should complete (messageCount >= hard limit)~~
+  - ~~If complete, mark session as complete~~
+  - ~~Return `{ aiMessage, sessionStatus, updatedWordBag }`~~
+- [x] ~~Export as callable Cloud Function~~
 - [ ] Test: Send multiple messages, verify conversation flow
 
 **Dependencies:** 5.2, 5.3  
@@ -477,16 +477,16 @@
 **Goal:** Start real chat session when user opens ChatScreen  
 **Test:** Open chat, see loading, then first message from AI
 
-- [ ] Create `frontend/src/services/chat.ts`
-- [ ] Implement `startChatSession(personaId)`:
-  - Get userId and activeWordListId from AuthContext
-  - Call createSession Cloud Function
-  - Return session data
-- [ ] In ChatScreen, call `startChatSession` on mount
-- [ ] Show loading spinner while waiting
-- [ ] Once session created:
-  - Store sessionId, wordBag in component state
-  - Display first message in GiftedChat
+- [x] ~~Create `frontend/src/services/chat.ts`~~
+- [x] ~~Implement `startChatSession(personaId)`:~~
+  - ~~Get userId and activeWordListId from AuthContext~~
+  - ~~Call createSession Cloud Function~~
+  - ~~Return session data~~
+- [x] ~~In ChatScreen, call `startChatSession` on mount~~
+- [x] ~~Show loading spinner while waiting~~
+- [x] ~~Once session created:~~
+  - ~~Store sessionId, wordBag in component state~~
+  - ~~Display first message in chat~~
 - [ ] Test: Open chat, verify session created in Firestore
 
 **Dependencies:** 4.1, 5.2, 2.2  
@@ -498,16 +498,16 @@
 **Goal:** Send user messages and receive AI responses  
 **Test:** Type message, send, see AI reply in real-time
 
-- [ ] In `chat.ts`, implement `sendUserMessage(sessionId, message)`:
-  - Call sendMessage Cloud Function
-  - Return AI response and updated state
-- [ ] In ChatScreen, on user sends message:
-  - Add message to GiftedChat immediately (optimistic UI)
-  - Call `sendUserMessage`
-  - Add AI response to chat
-  - Update word bag state if changed
-  - If session completed, show session end flow (Phase 7)
-- [ ] Add typing indicator while waiting for AI response
+- [x] ~~In `chat.ts`, implement `sendUserMessage(sessionId, message)`:~~
+  - ~~Call sendMessage Cloud Function~~
+  - ~~Return AI response and updated state~~
+- [x] ~~In ChatScreen, on user sends message:~~
+  - ~~Add message to chat immediately (optimistic UI)~~
+  - ~~Call `sendUserMessage`~~
+  - ~~Add AI response to chat~~
+  - ~~Update word bag state if changed~~
+  - ~~If session completed, show session end flow~~
+- [x] ~~Add typing indicator while waiting for AI response~~
 - [ ] Test: Have full conversation with AI
 
 **Dependencies:** 6.1, 5.5  

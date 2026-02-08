@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createSession = createSession;
 const admin = __importStar(require("firebase-admin"));
+const openai_1 = require("../llm/openai");
 // Constants (inlined to avoid cross-directory import issues during build)
 const WORD_BAG_SIZE = {
     min: 3,
@@ -86,8 +87,12 @@ async function createSession(db, userId, personaId, wordListId) {
         contextWindow: [],
     };
     await sessionRef.set(session);
-    // Placeholder first message (OpenAI integration in 5.3)
-    const firstMessage = `Hey! I'd love to chat with you. What's on your mind today?`;
+    // Generate first message using OpenAI
+    const wordNames = wordBag.map((w) => w.word);
+    const firstMessage = await (0, openai_1.generateFirstMessage)({
+        personaId,
+        wordBag: wordNames,
+    });
     // Store the first message
     const messageRef = db.collection("messages").doc();
     await messageRef.set({

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verbalist - Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@300;400;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #F6F3E7;
+            --bg-secondary: #FAEBD7;
+            --accent-primary: #E3AF64;
+            --accent-blue: #007AFF;
+            --accent-tertiary: #26428B;
+            --text-dark: #0F1939;
+            --text-gray: #8E8E93;
+            --white: #FFFFFF;
+        }
+
+        body {
+            font-family: 'Crimson Pro', serif;
+            background: #000;
+        }
+
+        .screen {
+            width: 430px;
+            height: 932px;
+            margin: 20px auto;
+            background: var(--bg-primary);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        /* Dashboard Header */
+        .dashboard-header {
+            background: white;
+            padding: 60px 24px 20px;
+            border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .profile-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .user-info h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 28px;
+            color: var(--text-dark);
+            margin-bottom: 2px;
+        }
+
+        .user-info p {
+            font-size: 14px;
+            color: var(--text-gray);
+        }
+
+        .settings-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--bg-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 18px;
+            color: var(--text-dark);
+        }
+
+        .active-list-card {
+            background: linear-gradient(135deg, #516AC8, #26428B);
+            padding: 16px;
+            border-radius: 14px;
+            color: white;
+            cursor: pointer;
+        }
+
+        .list-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            opacity: 0.8;
+            margin-bottom: 6px;
+        }
+
+        .list-name {
+            font-family: 'DM Serif Display', serif;
+            font-size: 18px;
+            margin-bottom: 4px;
+        }
+
+        .list-progress {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        /* Content Area */
+        .content-area {
+            height: calc(932px - 260px);
+            overflow-y: auto;
+        }
+
+        .section {
+            padding: 20px 16px;
+            animation: fadeInUp 0.6s ease-out backwards;
+        }
+
+        .section:nth-child(1) { animation-delay: 0.1s; }
+        .section:nth-child(2) { animation-delay: 0.2s; }
+
+        .section-header {
+            font-family: 'DM Serif Display', serif;
+            font-size: 22px;
+            color: var(--text-dark);
+            margin-bottom: 14px;
+            font-weight: 600;
+        }
+
+        /* Conversation List */
+        .conversation-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .conversation-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .conversation-item:hover {
+            transform: translateX(2px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .conversation-item.locked {
+            opacity: 0.6;
+        }
+
+        .persona-avatar {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-blue));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'DM Serif Display', serif;
+            font-size: 22px;
+            color: white;
+            flex-shrink: 0;
+            margin-right: 14px;
+        }
+
+        .conversation-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .conversation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 4px;
+        }
+
+        .persona-name-main {
+            font-family: 'DM Serif Display', serif;
+            font-size: 17px;
+            color: var(--text-dark);
+            font-weight: 600;
+        }
+
+        .conversation-time {
+            font-size: 13px;
+            color: var(--text-gray);
+        }
+
+        .conversation-preview {
+            font-size: 14px;
+            color: var(--text-gray);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .conversation-preview.unread {
+            color: var(--text-dark);
+            font-weight: 500;
+        }
+
+        .lock-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.05);
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-size: 11px;
+            color: var(--text-gray);
+            font-weight: 600;
+        }
+
+        .unread-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        /* Past Conversations */
+        .past-conversations {
+            background: var(--bg-primary);
+        }
+
+        .past-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 0.5px solid rgba(0, 0, 0, 0.08);
+            cursor: pointer;
+        }
+
+        .past-item:last-child {
+            border-bottom: none;
+        }
+
+        .past-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-blue));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'DM Serif Display', serif;
+            font-size: 16px;
+            color: white;
+            flex-shrink: 0;
+            margin-right: 12px;
+        }
+
+        .past-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .past-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 2px;
+        }
+
+        .past-persona-name {
+            font-family: 'DM Serif Display', serif;
+            font-size: 15px;
+            color: var(--text-dark);
+        }
+
+        .past-date {
+            font-size: 12px;
+            color: var(--text-gray);
+        }
+
+        .past-preview {
+            font-size: 13px;
+            color: var(--text-gray);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="screen">
+    <!-- Header -->
+    <div class="dashboard-header">
+        <div class="profile-row">
+            <div class="user-info">
+                <h2>Sarah</h2>
+                <p>Welcome back</p>
+            </div>
+            <div class="settings-icon">⚙</div>
+        </div>
+
+        <div class="active-list-card">
+            <div class="list-label">Active Word List</div>
+            <div class="list-name">General High-Level</div>
+            <div class="list-progress">12 of 50 words mastered</div>
+        </div>
+    </div>
+
+    <!-- Content -->
+    <div class="content-area">
+        <!-- Active Conversations -->
+        <div class="section">
+            <div class="section-header">Conversations</div>
+            <div class="conversation-list">
+                <div class="conversation-item">
+                    <div class="persona-avatar">C</div>
+                    <div class="conversation-info">
+                        <div class="conversation-header">
+                            <div class="persona-name-main">Chris</div>
+                            <div class="conversation-time">Now</div>
+                        </div>
+                        <div class="conversation-preview unread">Do you think there's value in being more...</div>
+                    </div>
+                    <div class="unread-indicator"></div>
+                </div>
+
+                <div class="conversation-item locked">
+                    <div class="persona-avatar">G</div>
+                    <div class="conversation-info">
+                        <div class="conversation-header">
+                            <div class="persona-name-main">Gemma</div>
+                            <div class="conversation-time"></div>
+                        </div>
+                        <div class="conversation-preview">Unlock to start learning</div>
+                    </div>
+                    <div class="lock-badge">Premium</div>
+                </div>
+
+                <div class="conversation-item locked">
+                    <div class="persona-avatar">E</div>
+                    <div class="conversation-info">
+                        <div class="conversation-header">
+                            <div class="persona-name-main">Eva</div>
+                            <div class="conversation-time"></div>
+                        </div>
+                        <div class="conversation-preview">Unlock to start learning</div>
+                    </div>
+                    <div class="lock-badge">Premium</div>
+                </div>
+
+                <div class="conversation-item locked">
+                    <div class="persona-avatar">S</div>
+                    <div class="conversation-info">
+                        <div class="conversation-header">
+                            <div class="persona-name-main">Sid</div>
+                            <div class="conversation-time"></div>
+                        </div>
+                        <div class="conversation-preview">Unlock to start learning</div>
+                    </div>
+                    <div class="lock-badge">Premium</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Past Conversations -->
+        <div class="section past-conversations">
+            <div class="section-header">Recent</div>
+            <div class="past-item">
+                <div class="past-avatar">C</div>
+                <div class="past-info">
+                    <div class="past-header">
+                        <div class="past-persona-name">Chris</div>
+                        <div class="past-date">Yesterday</div>
+                    </div>
+                    <div class="past-preview">The ephemeral nature of modern media...</div>
+                </div>
+            </div>
+
+            <div class="past-item">
+                <div class="past-avatar">C</div>
+                <div class="past-info">
+                    <div class="past-header">
+                        <div class="past-persona-name">Chris</div>
+                        <div class="past-date">Jan 28</div>
+                    </div>
+                    <div class="past-preview">Discussing magnanimous gestures in literature...</div>
+                </div>
+            </div>
+
+            <div class="past-item">
+                <div class="past-avatar">C</div>
+                <div class="past-info">
+                    <div class="past-header">
+                        <div class="past-persona-name">Chris</div>
+                        <div class="past-date">Jan 27</div>
+                    </div>
+                    <div class="past-preview">The ubiquitous presence of social media...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
