@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import { generateChatResponse, scoreWordUsage, suggestRelatedWords } from "../llm/openai";
 import { buildWindDownInstruction } from "../llm/prompts";
 import { checkAndAwardBonusChat } from "./sessionManager";
+import { updateWordState } from "../srs/algorithm";
 
 // Constants
 const SESSION_LIMITS = {
@@ -19,6 +20,16 @@ interface WordBagItem {
   word: string;
   targetUseCount: number;
   currentUseCount: number;
+  selectionReason?: "due" | "new" | "random";
+}
+
+interface SRSStateForFrontend {
+  word: string;
+  bucket: number;
+  reviewCount: number;
+  correctUses: number;
+  confidence: number;
+  lastReviewed: string;
 }
 
 interface SendMessageResult {
@@ -34,6 +45,8 @@ interface SendMessageResult {
   errorType?: "ai_unavailable";
   /** ID of the user message stored in Firestore (for retry dedup) */
   userMessageId?: string;
+  /** SRS state per word (for overlay + dev panel) */
+  srsStates?: SRSStateForFrontend[];
 }
 
 // Common filler words that indicate minimal effort
@@ -292,6 +305,29 @@ export async function sendMessage(
   // Update word bag counts (only counts words scored >= 6)
   const updatedWordBag = updateWordBagCounts(wordBag, wordUsageScores);
 
+  // Update SRS state for each word in the bag (used correctly vs missed opportunity)
+  const wordListId = session.wordListId as string;
+  const userId = session.userId as string;
+  const srsResults = await Promise.all(
+    (wordBag as WordBagItem[]).map((item) => {
+      const score = wordUsageScores[item.word];
+      const correctlyUsed = score !== undefined && score >= 6;
+      return updateWordState(db, userId, wordListId, item.word, correctlyUsed);
+    })
+  ).catch((e) => {
+    console.warn("Non-critical: SRS update failed:", e);
+    return [];
+  });
+
+  const srsStatesForFrontend: SRSStateForFrontend[] = srsResults.map((s) => ({
+    word: s.word,
+    bucket: s.bucket,
+    reviewCount: s.reviewCount,
+    correctUses: s.correctUses,
+    confidence: s.confidence,
+    lastReviewed: s.lastReviewed?.toDate?.()?.toISOString?.() ?? new Date().toISOString(),
+  }));
+
   // Add the new user message to context
   contextMessages.push({ role: "user", content: userMessage });
 
@@ -417,5 +453,6 @@ export async function sendMessage(
     bonusChatEarned,
     suggestedWords: suggestedWords.length > 0 ? suggestedWords : undefined,
     userMessageId: userMsgRef.id,
+    srsStates: srsStatesForFrontend.length > 0 ? srsStatesForFrontend : undefined,
   };
 }

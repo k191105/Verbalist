@@ -38,6 +38,7 @@ const admin = __importStar(require("firebase-admin"));
 const openai_1 = require("../llm/openai");
 const prompts_1 = require("../llm/prompts");
 const sessionManager_1 = require("./sessionManager");
+const algorithm_1 = require("../srs/algorithm");
 // Constants
 const SESSION_LIMITS = {
     softWindDownAt: 15,
@@ -83,36 +84,43 @@ function classifyEngagement(message) {
 /**
  * Split a long AI response into multiple iMessage-style bubbles.
  * Rules:
- * - Max 3 messages
- * - Split on leading interjections ("I get that.", "Totally.", "Hmm")
- * - Split trailing questions into their own message
+ * - Only split ~30% of the time (randomly)
+ * - Max 2-3 messages when splitting
+ * - Split on natural boundaries: leading interjections with punctuation, trailing questions
+ * - Never split mid-word or create fragments
  */
 function splitIntoMessages(text) {
     const trimmed = text.trim();
-    if (trimmed.length < 60)
-        return [trimmed]; // Too short to split
+    // Too short to split or randomly don't split (70% chance of no split)
+    if (trimmed.length < 80 || Math.random() > 0.3) {
+        return [trimmed];
+    }
     const parts = [];
-    // Pattern 1: leading interjection (short agreement/reaction phrase at the start)
-    const leadingInterjectionPattern = /^((?:I get that|Totally|Exactly|Hmm|Hm|Right|For sure|Fair enough|Oh wow|Oh man|Ha|Haha|Yeah|True|Honestly|I mean|Oh interesting|Interesting|Good point|That's fair|I feel that|Same|Felt that|Oof|Oh for sure|Literally|Valid|Real)(?:[.!,])?)\s+(.+)$/is;
+    // Pattern 1: leading interjection that ends with punctuation
+    // Must be complete phrase with period/exclamation before continuing
+    const leadingInterjectionPattern = /^((?:I get that|Totally|Exactly|Hmm|Right|For sure|Fair enough|Oh wow|Oh man|Yeah|True|Honestly|I mean|Interesting|Good point|That's fair|I feel that|Oof|Literally|Real)[.!])\s+(.+)$/is;
     const leadMatch = trimmed.match(leadingInterjectionPattern);
     let remaining = trimmed;
-    if (leadMatch) {
+    if (leadMatch && leadMatch[1].length <= 20) { // Ensure interjection is short
         parts.push(leadMatch[1]);
         remaining = leadMatch[2];
     }
-    // Pattern 2: trailing question (last sentence is a question)
+    // Pattern 2: trailing question as separate message
+    // Only if it's a complete sentence and there's substantial text before it
     const sentences = remaining.match(/[^.!?]+[.!?]+/g);
     if (sentences && sentences.length >= 2) {
         const lastSentence = sentences[sentences.length - 1].trim();
-        if (lastSentence.endsWith("?")) {
-            const beforeQuestion = sentences.slice(0, -1).join("").trim();
-            if (beforeQuestion.length > 0) {
-                parts.push(beforeQuestion);
-                parts.push(lastSentence);
-            }
-            else {
-                parts.push(remaining);
-            }
+        const beforeLast = sentences.slice(0, -1).join(" ").trim();
+        // Only split if:
+        // 1. Last sentence is a question
+        // 2. Before-last text is substantial (>30 chars)
+        // 3. Last sentence is reasonable length (10-80 chars)
+        if (lastSentence.endsWith("?") &&
+            beforeLast.length > 30 &&
+            lastSentence.length > 10 &&
+            lastSentence.length < 80) {
+            parts.push(beforeLast);
+            parts.push(lastSentence);
         }
         else {
             parts.push(remaining);
@@ -121,8 +129,13 @@ function splitIntoMessages(text) {
     else {
         parts.push(remaining);
     }
-    // Cap at 3 messages
-    return parts.slice(0, 3).filter((p) => p.trim().length > 0);
+    // Cap at 3 messages and ensure no empty parts
+    const filtered = parts.slice(0, 3).filter((p) => p.trim().length > 5);
+    // Fallback: if splitting created invalid results, return original
+    if (filtered.length === 0 || filtered.some((p) => p.trim().length < 3)) {
+        return [trimmed];
+    }
+    return filtered;
 }
 /**
  * Update word bag counts based on LLM-scored usage.
@@ -161,7 +174,7 @@ async function fetchContextMessages(db, sessionId, limit) {
  * Process an incoming user message and generate AI response
  */
 async function sendMessage(db, sessionId, userMessage, retryFromMessageId, authenticatedUserId) {
-    var _a, _b, _c;
+    var _a, _b, _c, _d, _e;
     // Fetch the session
     const sessionRef = db.collection("chatSessions").doc(sessionId);
     const sessionDoc = await sessionRef.get();
@@ -238,6 +251,28 @@ async function sendMessage(db, sessionId, userMessage, retryFromMessageId, authe
     userMsgRef.update({ wordUsage: detectedWords, wordUsageScores }).catch((e) => console.warn("Non-critical: failed to update word scores on message:", e));
     // Update word bag counts (only counts words scored >= 6)
     const updatedWordBag = updateWordBagCounts(wordBag, wordUsageScores);
+    // Update SRS state for each word in the bag (used correctly vs missed opportunity)
+    const wordListId = session.wordListId;
+    const userId = session.userId;
+    const srsResults = await Promise.all(wordBag.map((item) => {
+        const score = wordUsageScores[item.word];
+        const correctlyUsed = score !== undefined && score >= 6;
+        return (0, algorithm_1.updateWordState)(db, userId, wordListId, item.word, correctlyUsed);
+    })).catch((e) => {
+        console.warn("Non-critical: SRS update failed:", e);
+        return [];
+    });
+    const srsStatesForFrontend = srsResults.map((s) => {
+        var _a, _b, _c, _d, _e;
+        return ({
+            word: s.word,
+            bucket: s.bucket,
+            reviewCount: s.reviewCount,
+            correctUses: s.correctUses,
+            confidence: s.confidence,
+            lastReviewed: (_e = (_d = (_c = (_b = (_a = s.lastReviewed) === null || _a === void 0 ? void 0 : _a.toDate) === null || _b === void 0 ? void 0 : _b.call(_a)) === null || _c === void 0 ? void 0 : _c.toISOString) === null || _d === void 0 ? void 0 : _d.call(_c)) !== null && _e !== void 0 ? _e : new Date().toISOString(),
+        });
+    });
     // Add the new user message to context
     contextMessages.push({ role: "user", content: userMessage });
     // Generate AI response — wrapped in try/catch so user message is preserved on failure
@@ -290,11 +325,37 @@ async function sendMessage(db, sessionId, userMessage, retryFromMessageId, authe
     const shouldComplete = newMessageCount >= effectiveHardLimit;
     const shouldWindDown = newMessageCount >= SESSION_LIMITS.softWindDownAt && !shouldComplete;
     const newStatus = shouldComplete ? "complete" : "active";
-    // Check if user earned a bonus chat (only on completion)
+    // On completion: check bonus chat + suggest new words in parallel
     let bonusChatEarned = false;
+    let suggestedWords = [];
     if (shouldComplete) {
-        bonusChatEarned = await (0, sessionManager_1.checkAndAwardBonusChat)(db, session.userId, updatedWordBag);
-        // Clear lastActiveSessionId on completion
+        const targetWords = updatedWordBag.map((w) => w.word);
+        const [bonus, suggestions] = await Promise.all([
+            (0, sessionManager_1.checkAndAwardBonusChat)(db, session.userId, updatedWordBag),
+            (0, openai_1.suggestRelatedWords)(targetWords).catch(() => []),
+        ]);
+        bonusChatEarned = bonus;
+        // Cross-check against user's existing word list and filter duplicates
+        if (suggestions.length > 0) {
+            try {
+                const userDoc = await db.collection("users").doc(session.userId).get();
+                const wordListId = (_d = userDoc.data()) === null || _d === void 0 ? void 0 : _d.activeWordListId;
+                if (wordListId) {
+                    const wlDoc = await db.collection("wordLists").doc(wordListId).get();
+                    const existingWords = new Set((((_e = wlDoc.data()) === null || _e === void 0 ? void 0 : _e.words) || []).map((w) => w.toLowerCase()));
+                    const targetSet = new Set(targetWords.map((w) => w.toLowerCase()));
+                    suggestedWords = suggestions
+                        .filter((w) => !existingWords.has(w.toLowerCase()) && !targetSet.has(w.toLowerCase()))
+                        .slice(0, 4);
+                }
+                else {
+                    suggestedWords = suggestions.slice(0, 4);
+                }
+            }
+            catch (_f) {
+                suggestedWords = suggestions.slice(0, 4);
+            }
+        }
         await db.collection("users").doc(session.userId).update({
             lastActiveSessionId: admin.firestore.FieldValue.delete(),
         });
@@ -319,7 +380,9 @@ async function sendMessage(db, sessionId, userMessage, retryFromMessageId, authe
         messageCount: newMessageCount,
         shouldWindDown,
         bonusChatEarned,
+        suggestedWords: suggestedWords.length > 0 ? suggestedWords : undefined,
         userMessageId: userMsgRef.id,
+        srsStates: srsStatesForFrontend.length > 0 ? srsStatesForFrontend : undefined,
     };
 }
 //# sourceMappingURL=messageHandler.js.map

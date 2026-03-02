@@ -6,6 +6,7 @@ import {
 } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, firestore } from "./firebase";
+import { clearPushTokenFromFirestore } from "./notifications";
 import type { User } from "../../../shared/types";
 
 const DEFAULT_WORD_LIST_ID = "template-general";
@@ -76,5 +77,13 @@ export async function signIn() {
 }
 
 export async function signOut() {
+  const uid = auth.currentUser?.uid;
+  if (uid) {
+    try {
+      await clearPushTokenFromFirestore(uid);
+    } catch (e) {
+      console.warn("Failed to clear push token on sign out:", e);
+    }
+  }
   await firebaseSignOut(auth);
 }

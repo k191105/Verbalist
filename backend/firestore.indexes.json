@@ -1,6 +1,20 @@
 {
   "indexes": [
     {
+      "collectionGroup": "srsState",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "wordListId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "chatSessions",
       "queryScope": "COLLECTION",
       "fields": [

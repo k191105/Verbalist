@@ -1,3 +1,9 @@
+/**
+ * Paywall drawer matching paywall.dart design.
+ * Integrates RevenueCat for offerings, purchase, and restore.
+ * Slides up as a bottom drawer (like Dev panel).
+ */
+
 import { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -8,20 +14,98 @@ import {
   Animated,
   Dimensions,
   ScrollView,
+  ActivityIndicator,
+  Alert,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
 import { FONT_FAMILIES } from "../config/fonts";
 import type { ThemeColors } from "../config/theme";
+import { usePurchases } from "../hooks/usePurchases";
+import {
+  purchasePackage,
+  restorePurchases,
+  hasProEntitlement,
+  isUserCancelledError,
+} from "../services/purchases";
+import type { PurchasesPackage } from "react-native-purchases";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+const FEATURE_BULLETS = [
+  "8 daily conversations with bonuses",
+  "All four personas: Chris, Gemma, Eva, Sid",
+  "Create custom word lists",
+  "Advanced progress tracking & SRS",
+];
+
+/** Feature groups for "Everything in Pro" expandable (paywall.dart style) */
+const PRO_FEATURE_GROUPS: Record<string, string[]> = {
+  Conversations: [
+    "8 daily chats plus mastery bonuses",
+    "All four personas: Chris, Gemma, Eva, Sid",
+    "Session recovery across app restarts",
+  ],
+  Learn: [
+    "SRS & spaced repetition",
+    "Progress tracking & words mastered",
+    "Custom word lists & priorities",
+  ],
+  Customize: [
+    "Premium themes (Lapis, Obsidian, Porcelain)",
+    "Chat background options",
+    "Priority words & learn again",
+  ],
+};
 
 interface UpgradePromptProps {
   visible: boolean;
   onClose: () => void;
-  onUpgrade: () => void;
+  onUpgrade?: () => void;
   theme: ThemeColors;
   isPremium?: boolean;
-  personaName?: string; // e.g. "Gemma" for persona-specific prompts
+  personaName?: string;
+  contextKey?: "daily_limit" | "persona" | "settings" | "default";
 }
 
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+function contextualHeadline(
+  contextKey: string | undefined,
+  personaName?: string,
+  isPremium?: boolean
+): string {
+  if (isPremium) return "You've earned your rest!";
+  switch (contextKey) {
+    case "daily_limit":
+      return "Daily Limit Reached";
+    case "persona":
+      return personaName ? `Meet ${personaName}` : "Unlock More Personas";
+    case "settings":
+      return "Unlock Verbalist Pro";
+    default:
+      return "Read smarter. Unlock more.";
+  }
+}
+
+function contextualSubtitle(
+  contextKey: string | undefined,
+  personaName?: string,
+  isPremium?: boolean
+): string {
+  if (isPremium)
+    return "You've completed all 8 chats today. Come back tomorrow!";
+  if (contextKey === "persona" && personaName)
+    return `${personaName} brings literary vocabulary and a sophisticated perspective.`;
+  if (contextKey === "daily_limit")
+    return "You've used all your chats for today.";
+  return "Unlock unlimited learning with Verbalist Pro.";
+}
 
 export default function UpgradePrompt({
   visible,
@@ -30,10 +114,23 @@ export default function UpgradePrompt({
   theme,
   isPremium = false,
   personaName,
+  contextKey = "default",
 }: UpgradePromptProps) {
+  const {
+    isPro,
+    offering,
+    getMonthlyPackage,
+    getYearlyPackage,
+    refresh,
+  } = usePurchases();
+
+  const [selectedPlan, setSelectedPlan] = useState<"annual" | "monthly">("annual");
+  const [loading, setLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [allProExpanded, setAllProExpanded] = useState(false);
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
-  const [selectedPlan, setSelectedPlan] = useState<"annual" | "monthly">("annual");
 
   useEffect(() => {
     if (visible) {
@@ -66,19 +163,74 @@ export default function UpgradePrompt({
     }
   }, [visible]);
 
+  useEffect(() => {
+    if (visible && isPro) {
+      onClose();
+    }
+  }, [visible, isPro, onClose]);
+
+  const yearlyPkg = getYearlyPackage();
+  const monthlyPkg = getMonthlyPackage();
+
+  const displayPrice = (pkg: PurchasesPackage | null): string => {
+    if (!pkg?.product?.priceString) return "—";
+    return pkg.product.priceString;
+  };
+
+  const ctaLabel = (): string => {
+    const pkg = selectedPlan === "annual" ? yearlyPkg : monthlyPkg;
+    const intro = pkg?.product?.introPrice;
+    if (intro?.priceString) return `Start ${intro.priceString} Trial`;
+    return "Continue";
+  };
+
+  const handlePurchase = async () => {
+    const pkg = selectedPlan === "annual" ? yearlyPkg : monthlyPkg;
+    if (!pkg) {
+      Alert.alert("Error", "Products are still loading. Please try again.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { customerInfo } = await purchasePackage(pkg);
+      if (hasProEntitlement(customerInfo)) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        onUpgrade?.();
+        onClose();
+      }
+    } catch (e) {
+      if (!isUserCancelledError(e)) {
+        Alert.alert("Purchase Failed", e instanceof Error ? e.message : "Something went wrong.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    setRestoreLoading(true);
+    try {
+      const customerInfo = await restorePurchases();
+      if (hasProEntitlement(customerInfo)) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await refresh();
+        onUpgrade?.();
+        onClose();
+      } else {
+        Alert.alert("No Purchases Found", "No active subscription to restore.");
+      }
+    } catch (e) {
+      Alert.alert("Restore Failed", e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setRestoreLoading(false);
+    }
+  };
+
   if (!visible) return null;
 
-  const title = isPremium 
-    ? "You've earned your rest!" 
-    : personaName 
-    ? `Meet ${personaName}` 
-    : "Daily Limit Reached";
-
-  const subtitle = isPremium
-    ? "You've completed all 8 chats today. Come back tomorrow for more conversations!"
-    : personaName
-    ? `${personaName} specializes in literary vocabulary and brings a sophisticated perspective to conversations.`
-    : "You've used all your chats for today";
+  const proActive = isPro || isPremium;
+  const title = contextualHeadline(contextKey, personaName, isPremium);
+  const subtitle = contextualSubtitle(contextKey, personaName, isPremium);
 
   return (
     <Modal
@@ -96,147 +248,232 @@ export default function UpgradePrompt({
         <Animated.View
           style={[
             styles.drawer,
-            { backgroundColor: "#FFFFFF", transform: [{ translateY: slideAnim }] },
+            { backgroundColor: theme.cardBackground, transform: [{ translateY: slideAnim }] },
           ]}
         >
           <View style={[styles.pullHandle, { backgroundColor: theme.textSecondary }]} />
-          
-          <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-            <View style={styles.drawerContent}>
-              {/* Header */}
-              <View style={styles.header}>
-                <Text style={[styles.title, { color: theme.text }]}>
-                  {title}
+
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Header — paywall.dart style: app branding + headline */}
+            <View style={styles.header}>
+              <View style={styles.headerBrand}>
+                <Text style={[styles.appName, { color: theme.accentSecondary }]}>
+                  Verbalist
                 </Text>
-                <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-                  {subtitle}
-                </Text>
+                <View style={[styles.proBadge, { backgroundColor: theme.accentTertiary }]}>
+                  <Text style={styles.proBadgeText}>Pro</Text>
+                </View>
               </View>
+              <Text style={[styles.headline, { color: theme.text }]}>{title}</Text>
+              <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+                {subtitle}
+              </Text>
+            </View>
 
-              {!isPremium && (
-                <>
-                  <View style={[styles.divider, { backgroundColor: theme.textSecondary }]} />
+            {proActive ? (
+              <TouchableOpacity
+                style={[styles.ctaButton, { backgroundColor: theme.accentTertiary }]}
+                onPress={onClose}
+                activeOpacity={0.9}
+              >
+                <Text style={styles.ctaButtonText}>Got it</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                {/* Bullets — paywall.dart style with gradient dots */}
+                <View style={styles.bullets}>
+                  {FEATURE_BULLETS.map((bullet, i) => (
+                    <View key={i} style={styles.bulletRow}>
+                      <LinearGradient
+                        colors={[theme.accentSecondary, theme.accentTertiary]}
+                        style={styles.bulletDot}
+                      />
+                      <Text style={[styles.bulletText, { color: theme.textSecondary }]}>
+                        {bullet}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
 
-                  {/* Features intro */}
-                  <Text style={[styles.featureIntro, { color: theme.text }]}>
-                    {personaName ? `${personaName} joins conversations with Verbalist Premium.` : "Unlock unlimited learning with Premium."}
+                {/* Expandable: Everything in Pro — paywall.dart _buildAllProFeaturesExpandable */}
+                <TouchableOpacity
+                  style={[styles.expandableHeader, { borderBottomColor: theme.border }]}
+                  onPress={() => {
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                    setAllProExpanded((e) => !e);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.expandableIcon, { color: theme.accentTertiary }]}>✦</Text>
+                  <Text style={[styles.expandableTitle, { color: theme.text }]}>
+                    Everything in Pro
                   </Text>
-
-                  {/* Features list */}
-                  <View style={styles.featuresList}>
-                    <FeatureItem text="5 daily conversations, plus bonuses" theme={theme} />
-                    <FeatureItem text="All four personas (Chris, Gemma, Eva, Sid)" theme={theme} />
-                    <FeatureItem text="Create custom word lists" theme={theme} />
-                    <FeatureItem text="Advanced progress tracking" theme={theme} />
+                  <Text style={[styles.expandableChevron, { color: theme.textSecondary }]}>
+                    {allProExpanded ? "▼" : "▶"}
+                  </Text>
+                </TouchableOpacity>
+                {allProExpanded && (
+                  <View style={styles.expandableContent}>
+                    {Object.entries(PRO_FEATURE_GROUPS).map(([groupName, items]) => (
+                      <View key={groupName} style={styles.featureGroup}>
+                        <Text style={[styles.featureGroupTitle, { color: theme.text }]}>
+                          {groupName}
+                        </Text>
+                        {items.map((item, i) => (
+                          <View key={i} style={styles.featureItem}>
+                            <Text style={[styles.featureCheck, { color: theme.success }]}>✓</Text>
+                            <Text style={[styles.featureItemText, { color: theme.textSecondary }]}>
+                              {item}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    ))}
                   </View>
+                )}
 
-                  <View style={[styles.divider, { backgroundColor: theme.textSecondary }]} />
-
-                  {/* Plan options */}
+                {/* Plan cards */}
+                <View style={styles.planCards}>
                   <TouchableOpacity
                     style={[
-                      styles.planOption,
-                      selectedPlan === "annual" && styles.planOptionSelected,
-                      { borderColor: selectedPlan === "annual" ? theme.accentTertiary : "rgba(15, 25, 57, 0.1)" }
+                      styles.planCard,
+                      selectedPlan === "annual" && styles.planCardSelected,
+                      {
+                        borderColor: selectedPlan === "annual" ? theme.accentTertiary : theme.border,
+                        backgroundColor: selectedPlan === "annual" ? `${theme.accentTertiary}08` : theme.surface,
+                      },
                     ]}
-                    onPress={() => setSelectedPlan("annual")}
-                    activeOpacity={0.8}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSelectedPlan("annual");
+                    }}
                   >
-                    {selectedPlan === "annual" && (
+                    <View style={styles.planCardHeader}>
+                      <Text style={[styles.planName, { color: theme.text }]}>
+                        Pro Annual
+                      </Text>
                       <View style={[styles.bestValueBadge, { backgroundColor: theme.accentTertiary }]}>
-                        <Text style={styles.bestValueText}>BEST VALUE</Text>
-                      </View>
-                    )}
-                    <View style={styles.planHeader}>
-                      <Text style={[styles.planName, { color: theme.text }]}>Annual</Text>
-                      <View style={styles.planPrice}>
-                        <Text style={[styles.priceAmount, { color: theme.text }]}>$68</Text>
-                        <Text style={[styles.pricePeriod, { color: theme.textSecondary }]}>/year</Text>
+                        <Text style={styles.bestValueText}>Best Value</Text>
                       </View>
                     </View>
-                    <Text style={[styles.planDescription, { color: theme.textSecondary }]}>
-                      Best value for regular learners
+                    <Text style={[styles.planPrice, { color: theme.text }]}>
+                      {displayPrice(yearlyPkg)}
                     </Text>
-                    <Text style={[styles.monthlyBreakdown, { color: theme.accent }]}>
-                      $5.67/month • Save 30%
+                    <Text style={[styles.planPerMonth, { color: theme.textSecondary }]}>
+                      {yearlyPkg?.product?.introPrice
+                        ? `Free trial, then ${yearlyPkg.product.priceString}/year`
+                        : yearlyPkg?.product?.pricePerMonthString
+                          ? `${yearlyPkg.product.pricePerMonthString}/month • Best value`
+                          : "Best value for regular learners"}
                     </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={[
-                      styles.planOption,
-                      selectedPlan === "monthly" && styles.planOptionSelected,
-                      { borderColor: selectedPlan === "monthly" ? theme.accentTertiary : "rgba(15, 25, 57, 0.1)" }
+                      styles.planCard,
+                      selectedPlan === "monthly" && styles.planCardSelected,
+                      {
+                        borderColor: selectedPlan === "monthly" ? theme.accentTertiary : theme.border,
+                        backgroundColor: selectedPlan === "monthly" ? `${theme.accentTertiary}08` : theme.surface,
+                      },
                     ]}
-                    onPress={() => setSelectedPlan("monthly")}
-                    activeOpacity={0.8}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setSelectedPlan("monthly");
+                    }}
                   >
-                    <View style={styles.planHeader}>
-                      <Text style={[styles.planName, { color: theme.text }]}>Monthly</Text>
-                      <View style={styles.planPrice}>
-                        <Text style={[styles.priceAmount, { color: theme.text }]}>$8</Text>
-                        <Text style={[styles.pricePeriod, { color: theme.textSecondary }]}>/month</Text>
-                      </View>
+                    <View style={styles.planCardHeader}>
+                      <Text style={[styles.planName, { color: theme.text }]}>
+                        Pro Monthly
+                      </Text>
                     </View>
-                    <Text style={[styles.planDescription, { color: theme.textSecondary }]}>
+                    <Text style={[styles.planPrice, { color: theme.text }]}>
+                      {displayPrice(monthlyPkg)}
+                    </Text>
+                    <Text style={[styles.planPerMonth, { color: theme.textSecondary }]}>
                       Flexible monthly subscription
                     </Text>
                   </TouchableOpacity>
+                </View>
 
-                  {/* CTA Button */}
-                  <TouchableOpacity
-                    style={[styles.ctaButton, { backgroundColor: theme.accentTertiary }]}
-                    onPress={onUpgrade}
-                    activeOpacity={0.9}
+                {/* CTA - gradient like paywall.dart */}
+                <TouchableOpacity
+                  style={styles.ctaWrapper}
+                  onPress={handlePurchase}
+                  disabled={loading}
+                  activeOpacity={0.9}
+                >
+                  <LinearGradient
+                    colors={[theme.accentSecondary, theme.accentTertiary]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.ctaGradient}
                   >
-                    <Text style={styles.ctaButtonText}>Start 7-Day Free Trial</Text>
-                  </TouchableOpacity>
+                    {loading ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.ctaButtonText}>{ctaLabel()}</Text>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
 
-                  {/* Secondary actions */}
-                  <View style={styles.secondaryActions}>
-                    <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
-                      <Text style={[styles.secondaryLink, { color: theme.accentSecondary }]}>
-                        {personaName ? "Continue with Chris" : "Maybe later"}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity activeOpacity={0.7}>
+                {/* Secondary actions */}
+                <View style={styles.secondaryActions}>
+                  <TouchableOpacity
+                    onPress={() => setSelectedPlan("monthly")}
+                    disabled={loading}
+                  >
+                    <Text style={[styles.secondaryLink, { color: theme.textSecondary }]}>
+                      See monthly
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleRestore}
+                    disabled={restoreLoading}
+                  >
+                    {restoreLoading ? (
+                      <ActivityIndicator size="small" color={theme.accentSecondary} />
+                    ) : (
                       <Text style={[styles.secondaryLink, { color: theme.accentSecondary }]}>
                         Restore purchases
                       </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {/* Legal footer — paywall.dart _buildLegalFooter style */}
+                <View style={styles.legalFooter}>
+                  <Text style={[styles.terms, { color: theme.textSecondary }]}>
+                    Free trial for new subscribers. Auto-renews after trial. Cancel anytime.
+                  </Text>
+                  <Text style={[styles.termsSmall, { color: theme.textSecondary }]}>
+                    Cancel anytime • Keep your progress and word lists
+                  </Text>
+                  <View style={styles.legalLinks}>
+                    <TouchableOpacity>
+                      <Text style={[styles.legalLink, { color: theme.accentSecondary }]}>
+                        Privacy
+                      </Text>
+                    </TouchableOpacity>
+                    <Text style={[styles.terms, { color: theme.textSecondary }]}> • </Text>
+                    <TouchableOpacity>
+                      <Text style={[styles.legalLink, { color: theme.accentSecondary }]}>
+                        Terms
+                      </Text>
                     </TouchableOpacity>
                   </View>
-
-                  {/* Terms */}
-                  <Text style={[styles.terms, { color: theme.textSecondary }]}>
-                    Free trial for new subscribers. Auto-renews after trial. Cancel anytime.{"\n"}
-                    <Text style={{ color: theme.accentSecondary }}>Terms</Text> • <Text style={{ color: theme.accentSecondary }}>Privacy</Text>
-                  </Text>
-                </>
-              )}
-
-              {isPremium && (
-                <TouchableOpacity
-                  style={[styles.ctaButton, { backgroundColor: theme.accentTertiary, marginTop: 24 }]}
-                  onPress={onClose}
-                  activeOpacity={0.9}
-                >
-                  <Text style={styles.ctaButtonText}>Got it</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+                </View>
+              </>
+            )}
           </ScrollView>
         </Animated.View>
       </Animated.View>
     </Modal>
-  );
-}
-
-function FeatureItem({ text, theme }: { text: string; theme: ThemeColors }) {
-  return (
-    <View style={styles.featureItem}>
-      <Text style={[styles.featureBullet, { color: theme.accentSecondary }]}>•</Text>
-      <Text style={[styles.featureText, { color: theme.text }]}>{text}</Text>
-    </View>
   );
 }
 
@@ -252,9 +489,9 @@ const styles = StyleSheet.create({
   drawer: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingTop: 8,
+    paddingTop: 12,
     paddingBottom: 40,
-    maxHeight: SCREEN_HEIGHT * 0.85,
+    height: SCREEN_HEIGHT * 0.85,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
@@ -266,130 +503,196 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     alignSelf: "center",
-    marginBottom: 28,
-    opacity: 0.15,
+    marginBottom: 24,
+    opacity: 0.3,
   },
   scrollView: {
     flex: 1,
   },
-  drawerContent: {
-    paddingHorizontal: 28,
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingBottom: 32,
   },
   header: {
-    marginBottom: 24,
+    alignItems: "center",
+    marginBottom: 20,
   },
-  title: {
+  headerBrand: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  appName: {
     fontFamily: FONT_FAMILIES.display,
-    fontSize: 28,
-    letterSpacing: -0.5,
+    fontSize: 32,
+  },
+  proBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  proBadgeText: {
+    fontFamily: FONT_FAMILIES.bodySemiBold,
+    fontSize: 12,
+    letterSpacing: 0.5,
+    color: "#FFFFFF",
+  },
+  headline: {
+    fontFamily: FONT_FAMILIES.display,
+    fontSize: 26,
+    fontWeight: "600",
+    textAlign: "center",
+    lineHeight: 32,
     marginBottom: 8,
   },
   subtitle: {
     fontFamily: FONT_FAMILIES.body,
-    fontSize: 17,
-    lineHeight: 26,
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: "center",
+    opacity: 0.85,
   },
-  divider: {
-    height: 1,
-    marginVertical: 28,
-    opacity: 0.08,
+  expandableHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    marginBottom: 0,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 8,
   },
-  featureIntro: {
-    fontFamily: FONT_FAMILIES.body,
-    fontSize: 15,
-    lineHeight: 23,
+  expandableIcon: {
+    fontSize: 16,
+  },
+  expandableTitle: {
+    flex: 1,
+    fontFamily: FONT_FAMILIES.bodySemiBold,
+    fontSize: 16,
+  },
+  expandableChevron: {
+    fontSize: 20,
+    fontWeight: "300",
+  },
+  expandableContent: {
+    paddingTop: 12,
+    paddingBottom: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(0,0,0,0.06)",
+  },
+  featureGroup: {
     marginBottom: 16,
   },
-  featuresList: {
-    marginBottom: 28,
-    gap: 12,
+  featureGroupTitle: {
+    fontFamily: FONT_FAMILIES.bodySemiBold,
+    fontSize: 14,
+    letterSpacing: 0.3,
+    marginBottom: 8,
+    opacity: 0.9,
   },
   featureItem: {
     flexDirection: "row",
-    alignItems: "baseline",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 6,
+  },
+  featureCheck: {
+    fontFamily: FONT_FAMILIES.body,
+    fontSize: 14,
+  },
+  featureItemText: {
+    flex: 1,
+    fontFamily: FONT_FAMILIES.body,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  bullets: {
+    marginBottom: 24,
     gap: 12,
   },
-  featureBullet: {
-    fontSize: 18,
+  bulletRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
   },
-  featureText: {
+  bulletDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  bulletText: {
     flex: 1,
     fontFamily: FONT_FAMILIES.body,
     fontSize: 16,
-    lineHeight: 24,
+    lineHeight: 22,
   },
-  planOption: {
+  planCards: {
+    gap: 12,
+    marginBottom: 24,
+  },
+  planCard: {
     borderWidth: 2,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
-    position: "relative",
+    borderRadius: 12,
+    padding: 16,
   },
-  planOptionSelected: {
-    backgroundColor: "rgba(38, 66, 139, 0.02)",
+  planCardSelected: {
+    borderWidth: 2,
+  },
+  planCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  planName: {
+    fontFamily: FONT_FAMILIES.display,
+    fontSize: 18,
   },
   bestValueBadge: {
-    position: "absolute",
-    top: -10,
-    right: 20,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
   bestValueText: {
     color: "#FFFFFF",
-    fontSize: 11,
     fontFamily: FONT_FAMILIES.bodySemiBold,
+    fontSize: 11,
     letterSpacing: 0.5,
   },
-  planHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
-  },
-  planName: {
-    fontFamily: FONT_FAMILIES.display,
-    fontSize: 20,
-  },
   planPrice: {
-    alignItems: "flex-end",
-  },
-  priceAmount: {
     fontFamily: FONT_FAMILIES.display,
     fontSize: 24,
   },
-  pricePeriod: {
-    fontFamily: FONT_FAMILIES.body,
-    fontSize: 13,
-  },
-  planDescription: {
-    fontFamily: FONT_FAMILIES.body,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  monthlyBreakdown: {
+  planPerMonth: {
     fontFamily: FONT_FAMILIES.body,
     fontSize: 13,
     marginTop: 4,
   },
+  ctaWrapper: {
+    marginBottom: 16,
+    borderRadius: 25,
+    overflow: "hidden",
+  },
+  ctaGradient: {
+    height: 50,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   ctaButton: {
     width: "100%",
     paddingVertical: 18,
-    borderRadius: 16,
+    borderRadius: 25,
     alignItems: "center",
-    marginTop: 24,
   },
   ctaButtonText: {
     fontFamily: FONT_FAMILIES.bodySemiBold,
-    fontSize: 17,
+    fontSize: 16,
     color: "#FFFFFF",
   },
   secondaryActions: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 20,
-    paddingHorizontal: 8,
+    justifyContent: "space-evenly",
+    marginBottom: 20,
   },
   secondaryLink: {
     fontFamily: FONT_FAMILIES.body,
@@ -400,7 +703,28 @@ const styles = StyleSheet.create({
     fontFamily: FONT_FAMILIES.body,
     fontSize: 12,
     lineHeight: 18,
-    marginTop: 20,
-    paddingHorizontal: 20,
+  },
+  termsSmall: {
+    textAlign: "center",
+    fontFamily: FONT_FAMILIES.body,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 8,
+    opacity: 0.85,
+  },
+  legalFooter: {
+    marginTop: 8,
+    paddingTop: 16,
+  },
+  legalLinks: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 12,
+    gap: 4,
+  },
+  legalLink: {
+    fontFamily: FONT_FAMILIES.body,
+    fontSize: 12,
   },
 });

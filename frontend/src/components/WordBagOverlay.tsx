@@ -8,46 +8,72 @@ import {
 } from "react-native";
 import type { ThemeColors } from "../config/theme";
 
-interface WordBagItem {
+export interface WordBagDisplayItem {
   word: string;
-  confidence: number;
+  confidence: number; // 0–1 or session use ratio
+  bucket?: number;   // SRS bucket 0–6
+  reviewCount?: number;
+  correctUses?: number;
 }
 
 interface WordBagOverlayProps {
-  words: WordBagItem[];
+  words: WordBagDisplayItem[];
   visible: boolean;
   onClose: () => void;
   theme: ThemeColors;
 }
 
-function getConfidenceColor(confidence: number, accent: string): string {
-  if (confidence >= 1) return "#34C759"; // Green — fully used
-  if (confidence > 0) return "#FF9500"; // Orange — partially used
-  return accent; // Default accent — not yet used
+function getConfidenceColor(
+  confidence: number,
+  bucket: number | undefined,
+  accent: string
+): string {
+  if (bucket !== undefined && bucket >= 6) return "#E3AF64"; // Gold — mastered
+  if (confidence >= 1) return "#34C759"; // Green — fully used this session
+  if (confidence >= 0.6) return "#34C759"; // Green — high confidence
+  if (confidence >= 0.3) return "#FF9500"; // Orange — medium
+  if (confidence > 0) return "#FF6B35";   // Red-orange — low
+  return accent; // Default — not yet used
 }
 
-function WordItem({ item, theme }: { item: WordBagItem; theme: ThemeColors }) {
+function WordItem({
+  item,
+  theme,
+}: {
+  item: WordBagDisplayItem;
+  theme: ThemeColors;
+}) {
   const isUsed = item.confidence >= 1;
-  const fillColor = getConfidenceColor(item.confidence, theme.accent);
+  const isMastered = item.bucket !== undefined && item.bucket >= 6;
+  const fillColor = getConfidenceColor(item.confidence, item.bucket, theme.accent);
+  const displayConfidence =
+    item.bucket !== undefined ? item.bucket / 6 : item.confidence;
 
   return (
     <View style={[styles.wordItem, { backgroundColor: theme.surface }]}>
       <View style={styles.wordLabelRow}>
-        <Text style={[styles.wordText, { color: theme.text }, isUsed && styles.wordTextUsed]}>
+        <Text
+          style={[
+            styles.wordText,
+            { color: theme.text },
+            (isUsed || isMastered) && styles.wordTextUsed,
+            isMastered && { color: "#E3AF64" },
+          ]}
+        >
           {item.word}
         </Text>
         {isUsed && <Text style={styles.checkmark}>✓</Text>}
       </View>
       <View style={styles.confidenceContainer}>
         <View style={[styles.confidenceBar, { backgroundColor: theme.border }]}>
-          <View 
+          <View
             style={[
-              styles.confidenceFill, 
-              { 
-                width: `${Math.min(item.confidence * 100, 100)}%`,
+              styles.confidenceFill,
+              {
+                width: `${Math.min(displayConfidence * 100, 100)}%`,
                 backgroundColor: fillColor,
-              }
-            ]} 
+              },
+            ]}
           />
         </View>
       </View>

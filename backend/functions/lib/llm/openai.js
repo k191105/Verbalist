@@ -7,6 +7,7 @@ exports.LLM_MODELS = void 0;
 exports.generateChatResponse = generateChatResponse;
 exports.generateFirstMessage = generateFirstMessage;
 exports.scoreWordUsage = scoreWordUsage;
+exports.suggestRelatedWords = suggestRelatedWords;
 const openai_1 = __importDefault(require("openai"));
 const prompts_1 = require("./prompts");
 // Model configuration - centralized for easy modification
@@ -149,6 +150,43 @@ If no target words were used, respond with: {}`;
         // If LLM returns unparseable response, fall back to empty
         console.warn("Failed to parse word usage scores:", content);
         return {};
+    }
+}
+/**
+ * Given the session's target words, suggest 6-8 related sophisticated words.
+ * Cheap call: only sends the target words, not the full transcript.
+ */
+async function suggestRelatedWords(targetWords) {
+    var _a, _b, _c;
+    const prompt = `You are a vocabulary expansion tool. Given these target vocabulary words: ${targetWords.join(", ")}
+
+Suggest 8 sophisticated English vocabulary words that are thematically or semantically related. Pick words that:
+- Are genuinely useful, high-level words (not basic everyday vocabulary)
+- Complement the given words in theme, register, or domain
+- Are distinct from each other and from the input words
+
+Respond ONLY with a JSON array of lowercase words. No explanation.`;
+    const client = getClient();
+    try {
+        const response = await client.chat.completions.create({
+            model: exports.LLM_MODELS.wordUsageScoring,
+            messages: [{ role: "system", content: prompt }],
+            max_tokens: 60,
+            temperature: 0.7,
+        });
+        const content = (_c = (_b = (_a = response.choices[0]) === null || _a === void 0 ? void 0 : _a.message) === null || _b === void 0 ? void 0 : _b.content) === null || _c === void 0 ? void 0 : _c.trim();
+        if (!content)
+            return [];
+        const cleaned = content.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+        const parsed = JSON.parse(cleaned);
+        if (Array.isArray(parsed)) {
+            return parsed.filter((w) => typeof w === "string").slice(0, 8);
+        }
+        return [];
+    }
+    catch (_d) {
+        console.warn("Failed to suggest related words");
+        return [];
     }
 }
 //# sourceMappingURL=openai.js.map

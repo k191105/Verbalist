@@ -50,6 +50,91 @@ export async function updateUserName(
   await updateDoc(ref, { name });
 }
 
+export async function updateUserTier(
+  userId: string,
+  tier: "free" | "premium"
+): Promise<void> {
+  const ref = doc(firestore, "users", userId);
+  await updateDoc(ref, { tier });
+}
+
+export async function updateUserPreferences(
+  userId: string,
+  updates: { themeName?: string; theme?: string }
+): Promise<void> {
+  const ref = doc(firestore, "users", userId);
+  const data: Record<string, unknown> = {};
+  if (updates.themeName !== undefined) data["preferences.themeName"] = updates.themeName;
+  if (updates.theme !== undefined) data["preferences.theme"] = updates.theme;
+  if (Object.keys(data).length === 0) return;
+  await updateDoc(ref, data);
+}
+
+export async function addWordToUserPriority(
+  userId: string,
+  word: string
+): Promise<void> {
+  const ref = doc(firestore, "users", userId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const data = snap.data();
+  const current: string[] = data.priorityWords || [];
+  if (current.includes(word.toLowerCase())) return;
+  const updated = [...current, word.toLowerCase()];
+  await updateDoc(ref, { priorityWords: updated });
+}
+
+export interface SRSStateDoc {
+  word: string;
+  bucket: number;
+  reviewCount: number;
+  correctUses: number;
+  confidence: number;
+  lastReviewed: { toDate: () => Date };
+}
+
+export async function getSRSStates(
+  userId: string,
+  wordListId: string,
+  words: string[]
+): Promise<SRSStateDoc[]> {
+  if (words.length === 0) return [];
+  const wordSet = new Set(words.map((w) => w.toLowerCase()));
+
+  const { collection, query, where, getDocs } = await import("firebase/firestore");
+  const q = query(
+    collection(firestore, "srsState"),
+    where("userId", "==", userId),
+    where("wordListId", "==", wordListId)
+  );
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => d.data())
+    .filter((d) => wordSet.has((d.word as string).toLowerCase()))
+    .map((d) => ({
+      word: d.word as string,
+      bucket: (d.bucket as number) ?? 0,
+      reviewCount: (d.reviewCount as number) ?? 0,
+      correctUses: (d.correctUses as number) ?? 0,
+      confidence: (d.confidence as number) ?? 0,
+      lastReviewed: d.lastReviewed as { toDate: () => Date },
+    }));
+}
+
+export async function removeWordFromUserPriority(
+  userId: string,
+  word: string
+): Promise<void> {
+  const ref = doc(firestore, "users", userId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const data = snap.data();
+  const current: string[] = data.priorityWords || [];
+  const wordLower = word.toLowerCase();
+  const updated = current.filter((w) => w !== wordLower);
+  await updateDoc(ref, { priorityWords: updated });
+}
+
 export async function createCustomWordList(
   userId: string,
   name: string,

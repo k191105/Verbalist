@@ -37,6 +37,7 @@ exports.checkAndAwardBonusChat = checkAndAwardBonusChat;
 exports.createSession = createSession;
 const admin = __importStar(require("firebase-admin"));
 const openai_1 = require("../llm/openai");
+const wordBagSelector_1 = require("./wordBagSelector");
 // Constants (inlined to avoid cross-directory import issues during build)
 const WORD_BAG_SIZE = {
     min: 3,
@@ -65,20 +66,14 @@ function checkDailyLimit(tier, dailyUsageCount, bonusChatsEarned, bonusChatsUsed
     return dailyUsageCount >= totalAvailable;
 }
 /**
- * Select random words for the word bag (no SRS yet)
+ * Create a word bag with target use counts and optional selection reason
  */
-function selectRandomWords(words, count) {
-    const shuffled = [...words].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, count);
-}
-/**
- * Create a word bag with target use counts
- */
-function createWordBag(words) {
-    return words.map((word) => ({
+function createWordBag(selected) {
+    return selected.map(({ word, reason }) => ({
         word,
         targetUseCount: 1,
         currentUseCount: 0,
+        selectionReason: reason,
     }));
 }
 /**
@@ -156,21 +151,21 @@ async function createSession(db, userId, personaId, wordListId) {
         throw new Error("permission-denied: Word list does not belong to this user");
     }
     const wordList = wordListData;
+    // Fetch user's priority words (for SRS selection)
+    const priorityWords = userData.priorityWords || [];
     // Handle edge case: empty or very short word lists
     let selectedWords;
     if (wordList.words.length === 0) {
-        // Empty word list → no target words, just conversation
         selectedWords = [];
     }
     else if (wordList.words.length < WORD_BAG_SIZE.min) {
-        // Fewer words than minimum → use all available words
-        selectedWords = wordList.words;
+        selectedWords = wordList.words.map((w) => ({ word: w, reason: "new" }));
     }
     else {
-        // Normal case: select random words for the word bag (3-5 words)
         const bagSize = Math.floor(Math.random() * (WORD_BAG_SIZE.max - WORD_BAG_SIZE.min + 1)) +
             WORD_BAG_SIZE.min;
-        selectedWords = selectRandomWords(wordList.words, bagSize);
+        const selected = await (0, wordBagSelector_1.selectWordBag)(db, userId, wordListId, wordList.words, bagSize, priorityWords);
+        selectedWords = selected;
     }
     const wordBag = createWordBag(selectedWords);
     // Create the session document

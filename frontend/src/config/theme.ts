@@ -1,7 +1,7 @@
 // Centralized theme configuration
-// Three themes: lapis (default), obsidian (dark), porcelain (warm)
+// Three themes: lapis (default), obsidian (dark), porcelain (warm) + system (follows device)
 
-export type ThemeName = "lapis" | "obsidian" | "porcelain";
+export type ThemeName = "lapis" | "obsidian" | "porcelain" | "system";
 
 export interface ThemeColors {
   // Base colors
@@ -160,10 +160,24 @@ const porcelain: ThemeColors = {
   error: "#DC2626",
 };
 
-export const THEMES: Record<ThemeName, ThemeColors> = {
+export const THEMES: Record<Exclude<ThemeName, "system">, ThemeColors> = {
   lapis,
   obsidian,
   porcelain,
 };
 
 export const DEFAULT_THEME: ThemeName = "lapis";
+
+/** Resolve "system" to lapis (light) or obsidian (dark) based on device */
+export function resolveThemeColors(
+  themeName: ThemeName,
+  colorScheme: "light" | "dark" | null | undefined
+): ThemeColors {
+  const resolved: Exclude<ThemeName, "system"> =
+    themeName === "system"
+      ? colorScheme === "dark"
+        ? "obsidian"
+        : "lapis"
+      : themeName;
+  return THEMES[resolved];
+}

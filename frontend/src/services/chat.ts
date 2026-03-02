@@ -8,6 +8,16 @@ interface WordBagItem {
   word: string;
   targetUseCount: number;
   currentUseCount: number;
+  selectionReason?: "due" | "new" | "random";
+}
+
+export interface SRSStateForFrontend {
+  word: string;
+  bucket: number;
+  reviewCount: number;
+  correctUses: number;
+  confidence: number;
+  lastReviewed: string;
 }
 
 interface CreateSessionResult {
@@ -28,6 +38,7 @@ interface SendMessageResult {
   suggestedWords?: string[]; // words to suggest adding on session complete
   errorType?: "ai_unavailable";
   userMessageId?: string;
+  srsStates?: SRSStateForFrontend[];
 }
 
 /**
@@ -51,7 +62,7 @@ export async function startChatSession(
  */
 export async function checkActiveSession(
   userId: string
-): Promise<{ sessionId: string; wordBag: WordBagItem[]; messages: any[] } | null> {
+): Promise<{ sessionId: string; personaId: string; wordBag: WordBagItem[]; messages: any[] } | null> {
   const { collection, query, where, getDocs, orderBy, limit } = await import("firebase/firestore");
   const { firestore: db } = await import("./firebase");
 
@@ -88,6 +99,7 @@ export async function checkActiveSession(
 
   return {
     sessionId: sessionDoc.id,
+    personaId: sessionData.personaId as string,
     wordBag: sessionData.wordBag || [],
     messages,
   };

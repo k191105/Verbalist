@@ -822,14 +822,14 @@
 **Goal:** Show the user a motivating snapshot of their vocabulary progress  
 **Test:** After several chats, see word count and recent mastered words on dashboard
 
-- [ ] Add a small section to DashboardScreen below the daily progress:
+- [x] Add a small section to DashboardScreen below the daily progress:
   - "X words practiced" total across all sessions
   - "X words mastered" (scored >= 6 at least once)
   - List of 3-5 most recently mastered words as subtle pills/chips
-- [ ] Pull from session word bag data (aggregate from completed sessions)
-- [ ] This is pre-SRS — just raw counts from session `wordUsageScores`. SRS (Phase 10) will make this richer later.
-- [ ] Keep it lightweight — no charts yet, just numbers and a few words
-- [ ] Give the user the option to say "learn again" - SRS eventually will do this automatically anyway, but
+- [x] Pull from session word bag data (aggregate from completed sessions)
+- [x] This is pre-SRS — just raw counts from session `wordUsageScores`. SRS (Phase 10) will make this richer later.
+- [x] Keep it lightweight — no charts yet, just numbers and a few words
+- [x] Give the user the option to say "learn again" - SRS eventually will do this automatically anyway, but
  the user can add it to their to learn list immediately as well and this will also guide SRS
 - [ ] Test: Complete a few chats, see stats update
 
@@ -847,10 +847,10 @@
 - [x] ~~Create `frontend/src/screens/settings/SettingsScreen.tsx` based on settingsMockup.html~~
 - [x] ~~Display grouped settings: Learning (word list link), Preferences (theme, notifications, premium chat bg), Account (upgrade, restore), About (version, privacy, terms, support)~~
 - [x] ~~Dashboard gear button navigates to Settings~~
-- [ ] Update user preferences in Firestore on change (theme picker not yet interactive)
-- [ ] Apply theme change immediately using React Context or state
-- [ ] Persist preferences across sessions
-- [ ] Edge case: "System" theme option follows device light/dark mode
+- [x] Update user preferences in Firestore on change (theme picker not yet interactive)
+- [x] Apply theme change immediately using React Context or state
+- [x] Persist preferences across sessions
+- [x] Edge case: "System" theme option follows device light/dark mode
 
 **Dependencies:** 2.2  
 **Estimated time:** 60 min
@@ -864,8 +864,8 @@
 - [x] ~~Account section: profile card, subscription badge, Upgrade to Premium, Restore Purchases~~
 - [x] ~~Sign Out with confirmation dialog → signOut + navigate to Welcome~~
 - [x] ~~Delete Account with double confirmation → signOut + navigate to Welcome~~
-- [ ] Full server-side account deletion (Cloud Function to purge user data)
-- [ ] Edge case: If user is mid-session when they log out, abandon the session
+- [x] Full server-side account deletion (Cloud Function to purge user data)
+- [x] Edge case: If user is mid-session when they log out, abandon the session
 
 **Dependencies:** 9.1, 2.2  
 **Estimated time:** 30 min
@@ -878,18 +878,18 @@
 **Goal:** Calculate word bucket progression  
 **Test:** Unit test bucket updates
 
-- [ ] Create `backend/functions/src/srs/algorithm.ts`
-- [ ] Implement SRS bucket logic:
+- [x] Create `backend/functions/src/srs/algorithm.ts`
+- [x] Implement SRS bucket logic:
   - Buckets 0-6 (0 = new word, 6 = mastered)
   - On correct use: increment bucket
   - On missed opportunity: decrement bucket or reset
   - Calculate confidence score: `(bucket / 6) * (correctUses / reviewCount)`
-- [ ] Implement `updateWordState(userId, wordListId, word, correctlyUsed)`:
+- [x] Implement `updateWordState(userId, wordListId, word, correctlyUsed)`:
   - Fetch or create SRSState document
   - Update bucket, reviewCount, correctUses, lastReviewed
   - Calculate new confidence
   - Save to Firestore
-- [ ] Test: Call function with test data, verify updates
+- [x] Test: Call function with test data, verify updates
 
 **Dependencies:** 1.1, 5.1  
 **Estimated time:** 60 min
@@ -900,7 +900,7 @@
 **Goal:** Select words based on spaced repetition  
 **Test:** Create multiple sessions, verify word variety and review timing
 
-- [ ] Create `backend/functions/src/chat/wordBagSelector.ts`
+- [x] Create `backend/functions/src/chat/wordBagSelector.ts`
 - [ ] Implement `selectWordBag(userId, wordListId, bagSize)`:
   - Fetch all SRSState docs for user + word list
   - If empty (first time), initialize random words from list
@@ -909,7 +909,7 @@
     - Priority 2: Words in lower buckets (less mastered)
     - Priority 3: Random words not seen in a while
   - Return array of `bagSize` words
-- [ ] Integrate into `createSession` (replace random selection)
+- [x] Integrate into `createSession` (replace random selection)
 - [ ] Test: Create several sessions, verify SRS-based selection
 
 **Dependencies:** 10.1, 5.2  
@@ -921,7 +921,7 @@
 **Goal:** Track word usage and update SRS state  
 **Test:** Use word multiple times, verify bucket progression
 
-- [ ] In `sendMessage` Cloud Function:
+- [x] In `sendMessage` Cloud Function:
   - After detecting word usage in user message
   - Call `updateWordState(userId, wordListId, word, true)` for each used word
   - If word in word bag but not used by user after N messages, call with `false`
@@ -937,12 +937,12 @@
 **Goal:** Show visual confidence indicator for each word  
 **Test:** Open word bag, see different styles for mastered vs new words
 
-- [ ] In `WordBagOverlay`, accept `srsStates: SRSState[]` prop
-- [ ] For each word, display:
+- [x] In `WordBagOverlay`, accept `srsStates: SRSState[]` prop (via WordBagDisplayItem)
+- [x] For each word, display:
   - Word text
   - Confidence bar or color indicator (0-100%)
   - Bucket level (optional, for debugging)
-- [ ] Style words based on confidence:
+- [x] Style words based on confidence:
   - Low confidence: red/orange
   - Medium: yellow
   - High: green

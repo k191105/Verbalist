@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import Swipeable from "react-native-gesture-handler/Swipeable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -32,6 +33,8 @@ import {
 import {
   updateActiveWordList,
   updateWordList,
+  addWordToUserPriority,
+  removeWordFromUserPriority,
 } from "../services/firestore";
 import { parseAndValidateWords } from "../utils/wordValidator";
 
@@ -82,6 +85,8 @@ export default function WordListEditorScreen({ navigation }: Props) {
 
   // Presets
   const [presets, setPresets] = useState<WordListOption[]>([]);
+  const [priorityWords, setPriorityWords] = useState<Set<string>>(new Set());
+  const swipeableRefs = useRef<Map<string, Swipeable | null>>(new Map());
 
   const headerFade = useRef(new Animated.Value(0)).current;
   const contentFade = useRef(new Animated.Value(0)).current;
@@ -94,6 +99,11 @@ export default function WordListEditorScreen({ navigation }: Props) {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    const arr = user?.priorityWords;
+    setPriorityWords(new Set((arr || []).map((w: string) => w.toLowerCase())));
+  }, [user?.id, user?.priorityWords]);
 
   async function fetchData() {
     if (!user) return;
@@ -172,7 +182,36 @@ export default function WordListEditorScreen({ navigation }: Props) {
 
   const handleRemoveWord = (word: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    swipeableRefs.current.get(word)?.close();
     setWords((prev) => prev.filter((w) => w !== word));
+  };
+
+  const handlePrioritizeWord = async (word: string) => {
+    if (!user) return;
+    const wordLower = word.toLowerCase();
+    const isPrioritized = priorityWords.has(wordLower);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    swipeableRefs.current.get(word)?.close();
+
+    if (isPrioritized) {
+      setPriorityWords((prev) => {
+        const next = new Set(prev);
+        next.delete(wordLower);
+        return next;
+      });
+      try {
+        await removeWordFromUserPriority(user.id, word);
+      } catch (e) {
+        console.warn("Failed to remove priority:", e);
+      }
+    } else {
+      setPriorityWords((prev) => new Set([...prev, wordLower]));
+      try {
+        await addWordToUserPriority(user.id, word);
+      } catch (e) {
+        console.warn("Failed to add priority:", e);
+      }
+    }
   };
 
   const handleAddWords = useCallback(() => {
@@ -473,69 +512,104 @@ export default function WordListEditorScreen({ navigation }: Props) {
                   </Text>
                 </View>
               ) : (
-                displayWords.map((item, index) => (
-                  <TouchableOpacity
-                    key={item.word}
-                    style={[
-                      styles.wordItem,
-                      { backgroundColor: theme.cardBackground },
-                      index < displayWords.length - 1 && { borderBottomColor: theme.divider },
-                    ]}
-                    onPress={() => {
-                      // TODO: Show word detail modal with definition, usage stats
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    }}
-                    onLongPress={() => {
-                      // Long press to delete
-                      Alert.alert("Remove Word", `Remove "${item.word}" from your list?`, [
-                        { text: "Cancel", style: "cancel" },
-                        {
-                          text: "Remove",
-                          style: "destructive",
-                          onPress: () => handleRemoveWord(item.word),
-                        },
-                      ]);
-                    }}
-                  >
-                    {/* Confidence Dots */}
-                    <View style={styles.confidence}>
-                      {[0, 1, 2, 3].map((dotIndex) => (
-                        <View
-                          key={dotIndex}
-                          style={[
-                            styles.confidenceDot,
-                            {
-                              backgroundColor:
-                                dotIndex < item.confidence
-                                  ? item.isMastered
-                                    ? theme.accent // Gold for mastered
-                                    : theme.accentSecondary // Blue for learning
-                                  : theme.border, // Gray for empty
-                            },
-                          ]}
-                        />
-                      ))}
-                    </View>
-
-                    {/* Word Text */}
-                    <Text
-                      style={[
-                        styles.wordText,
-                        { color: theme.text },
-                        item.isMastered && { opacity: 0.6 },
-                      ]}
+                displayWords.map((item, index) => {
+                  const isPrioritized = priorityWords.has(item.word.toLowerCase());
+                  const renderRightActions = () => (
+                    <TouchableOpacity
+                      style={[styles.swipeAction, styles.swipeActionDelete, { backgroundColor: "#DC2626" }]}
+                      onPress={() => handleRemoveWord(item.word)}
                     >
-                      {item.word}
-                    </Text>
+                      <Text style={styles.swipeActionText}>Delete</Text>
+                    </TouchableOpacity>
+                  );
+                  const renderLeftActions = () => (
+                    <TouchableOpacity
+                      style={[
+                        styles.swipeAction,
+                        styles.swipeActionPrioritize,
+                        { backgroundColor: theme.accentSecondary },
+                      ]}
+                      onPress={() => handlePrioritizeWord(item.word)}
+                    >
+                      <Text style={styles.swipeActionText}>
+                        {isPrioritized ? "Unprioritize" : "Prioritize"}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                  return (
+                    <Swipeable
+                      key={item.word}
+                      ref={(ref) => {
+                        if (ref) swipeableRefs.current.set(item.word, ref);
+                      }}
+                      renderRightActions={renderRightActions}
+                      renderLeftActions={renderLeftActions}
+                      friction={2}
+                    >
+                      <TouchableOpacity
+                        style={[
+                          styles.wordItem,
+                          { backgroundColor: theme.cardBackground },
+                          index < displayWords.length - 1 && { borderBottomColor: theme.divider },
+                        ]}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        }}
+                        onLongPress={() => {
+                          Alert.alert("Remove Word", `Remove "${item.word}" from your list?`, [
+                            { text: "Cancel", style: "cancel" },
+                            {
+                              text: "Remove",
+                              style: "destructive",
+                              onPress: () => handleRemoveWord(item.word),
+                            },
+                          ]);
+                        }}
+                      >
+                        {isPrioritized && (
+                          <View style={[styles.priorityBadge, { backgroundColor: theme.accentSecondary }]}>
+                            <Text style={styles.priorityBadgeText}>★</Text>
+                          </View>
+                        )}
+                        {/* Confidence Dots */}
+                        <View style={styles.confidence}>
+                          {[0, 1, 2, 3].map((dotIndex) => (
+                            <View
+                              key={dotIndex}
+                              style={[
+                                styles.confidenceDot,
+                                {
+                                  backgroundColor:
+                                    dotIndex < item.confidence
+                                      ? item.isMastered
+                                        ? theme.accent
+                                        : theme.accentSecondary
+                                      : theme.border,
+                                },
+                              ]}
+                            />
+                          ))}
+                        </View>
 
-                    {/* Mastered Checkmark */}
-                    {item.isMastered && (
-                      <View style={[styles.checkmark, { backgroundColor: theme.accent }]}>
-                        <Text style={styles.checkmarkText}>✓</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))
+                        <Text
+                          style={[
+                            styles.wordText,
+                            { color: theme.text },
+                            item.isMastered && { opacity: 0.6 },
+                          ]}
+                        >
+                          {item.word}
+                        </Text>
+
+                        {item.isMastered && (
+                          <View style={[styles.checkmark, { backgroundColor: theme.accent }]}>
+                            <Text style={styles.checkmarkText}>✓</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    </Swipeable>
+                  );
+                })
               )}
             </View>
           </ScrollView>
@@ -709,6 +783,34 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  swipeAction: {
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    minWidth: 90,
+  },
+  swipeActionDelete: {
+    alignItems: "flex-end",
+  },
+  swipeActionPrioritize: {
+    alignItems: "flex-start",
+  },
+  swipeActionText: {
+    color: "#FFFFFF",
+    fontFamily: FONT_FAMILIES.bodySemiBold,
+    fontSize: 15,
+  },
+  priorityBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  priorityBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 12,
   },
   confidence: {
     flexDirection: "row",

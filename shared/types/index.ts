@@ -18,9 +18,11 @@ export interface User {
   customInstructions?: string;
   preferences: {
     theme: "light" | "dark";
+    themeName?: "lapis" | "obsidian" | "porcelain" | "system";
     chatBackground?: string;
     fontSize: "small" | "medium" | "large";
   };
+  priorityWords?: string[]; // Words user wants to practice again (for SRS)
   notificationToken?: string;
 }
 

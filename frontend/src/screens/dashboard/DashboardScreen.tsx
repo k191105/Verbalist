@@ -17,8 +17,10 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/RootNavigator";
 import { useTheme } from "../../hooks/useTheme";
 import { useAuth } from "../../hooks/useAuth";
+import { usePurchases } from "../../hooks/usePurchases";
 import { FONT_FAMILIES } from "../../config/fonts";
 import UpgradePrompt from "../../components/UpgradePrompt";
+import DevPanel from "../../components/DevPanel";
 import { firestore } from "../../services/firebase";
 import {
   collection,
@@ -30,6 +32,7 @@ import {
   doc,
   getDoc,
 } from "firebase/firestore";
+import { addWordToUserPriority } from "../../services/firestore";
 
 
 
@@ -57,6 +60,42 @@ interface PastSession {
   completedAt: Date;
   messageCount: number;
   wordBag: { word: string; currentUseCount: number; targetUseCount: number }[];
+}
+
+interface WordsLearnedStats {
+  wordsPracticed: number;
+  wordsMastered: number;
+  recentlyMastered: string[];
+}
+
+function aggregateWordsLearned(sessions: PastSession[]): WordsLearnedStats {
+  const allWords = new Set<string>();
+  const masteredWords = new Set<string>();
+  const recentlyMastered: string[] = [];
+
+  // Process most recent first for "recently mastered"
+  const sorted = [...sessions].sort(
+    (a, b) => b.completedAt.getTime() - a.completedAt.getTime()
+  );
+
+  for (const session of sorted) {
+    for (const item of session.wordBag) {
+      allWords.add(item.word.toLowerCase());
+      const isMastered = item.currentUseCount >= item.targetUseCount || item.currentUseCount >= 1;
+      if (isMastered) {
+        masteredWords.add(item.word.toLowerCase());
+        if (recentlyMastered.length < 5 && !recentlyMastered.includes(item.word.toLowerCase())) {
+          recentlyMastered.push(item.word.toLowerCase());
+        }
+      }
+    }
+  }
+
+  return {
+    wordsPracticed: allWords.size,
+    wordsMastered: masteredWords.size,
+    recentlyMastered,
+  };
 }
 
 function getGreeting(): string {
@@ -96,6 +135,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { user } = useAuth();
+  const { isPro } = usePurchases();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -106,10 +146,19 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const [activeSessionPreview, setActiveSessionPreview] = useState("");
   const [pastSessions, setPastSessions] = useState<PastSession[]>([]);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [wordsLearned, setWordsLearned] = useState<WordsLearnedStats>({
+    wordsPracticed: 0,
+    wordsMastered: 0,
+    recentlyMastered: [],
+  });
+  const [learnAgainLoading, setLearnAgainLoading] = useState<string | null>(null);
 
   // Paywall
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradePersonaName, setUpgradePersonaName] = useState<string | undefined>(undefined);
+
+  // Dev panel (remove for production)
+  const [showDevPanel, setShowDevPanel] = useState(false);
 
   const headerFade = useRef(new Animated.Value(0)).current;
   const contentFade = useRef(new Animated.Value(0)).current;
@@ -167,18 +216,18 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         limit(20)
       );
       const pastSnap = await getDocs(pastQ);
-      setPastSessions(
-        pastSnap.docs.map((d) => {
-          const data = d.data();
-          return {
-            id: d.id,
-            personaId: data.personaId,
-            completedAt: data.completedAt?.toDate() || new Date(),
-            messageCount: data.messageCount || 0,
-            wordBag: data.wordBag || [],
-          };
-        })
-      );
+      const past = pastSnap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          personaId: data.personaId,
+          completedAt: data.completedAt?.toDate() || new Date(),
+          messageCount: data.messageCount || 0,
+          wordBag: data.wordBag || [],
+        };
+      });
+      setPastSessions(past);
+      setWordsLearned(aggregateWordsLearned(past));
 
       setDataLoaded(true);
     } catch (err) {
@@ -217,9 +266,9 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     setRefreshing(false);
   }, [fetchData]);
 
-  const handleStartChat = () => {
+  const handleStartChat = (personaId?: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate("Chat");
+    navigation.navigate("Chat", personaId ? { personaId } : undefined);
   };
 
   const handlePersonaInfo = (personaId: string) => {
@@ -241,6 +290,20 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const handleViewPastChat = (sessionId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     navigation.navigate("PastChat", { sessionId });
+  };
+
+  const handleLearnAgain = async (word: string) => {
+    if (!user) return;
+    setLearnAgainLoading(word);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await addWordToUserPriority(user.id, word);
+      // Word added to priority list — will be favored in future sessions
+    } catch (err) {
+      console.warn("Failed to add to learn again:", err);
+    } finally {
+      setLearnAgainLoading(null);
+    }
   };
 
   if (loading) {
@@ -273,16 +336,30 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
             <Text style={[styles.greeting, { color: theme.text }]}>{user?.name || "Hey there"}</Text>
             <Text style={[styles.greetingSub, { color: theme.textSecondary }]}>{getGreeting()}</Text>
           </View>
-          <TouchableOpacity
-            style={[styles.settingsBtn, { backgroundColor: theme.background }]}
-            activeOpacity={0.7}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              navigation.navigate("Settings");
-            }}
-          >
-            <Text style={{ fontSize: 18, color: theme.text }}>⚙</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <TouchableOpacity
+              style={[styles.devBtn, { backgroundColor: theme.surface }]}
+              activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setShowDevPanel(true);
+              }}
+            >
+              <Text style={[styles.devBtnText, { color: theme.textSecondary }]}>
+                DEV
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.settingsBtn, { backgroundColor: theme.background }]}
+              activeOpacity={0.7}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                navigation.navigate("Settings");
+              }}
+            >
+              <Text style={{ fontSize: 18, color: theme.text }}>⚙</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <TouchableOpacity style={styles.wordListCard} activeOpacity={0.75} onPress={handleOpenWordListEditor}>
@@ -308,13 +385,60 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       >
         <Animated.View style={{ opacity: contentFade, transform: [{ translateY: contentSlide }] }}>
 
+          {/* Words Learned */}
+          {(wordsLearned.wordsPracticed > 0 || wordsLearned.wordsMastered > 0) && (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>Words Learned</Text>
+              <View style={[styles.wordsLearnedCard, { backgroundColor: theme.cardBackground }]}>
+                <View style={styles.wordsLearnedRow}>
+                  <Text style={[styles.wordsLearnedStat, { color: theme.text }]}>
+                    {wordsLearned.wordsPracticed}
+                  </Text>
+                  <Text style={[styles.wordsLearnedLabel, { color: theme.textSecondary }]}>
+                    words practiced
+                  </Text>
+                </View>
+                <View style={styles.wordsLearnedRow}>
+                  <Text style={[styles.wordsLearnedStat, { color: theme.text }]}>
+                    {wordsLearned.wordsMastered}
+                  </Text>
+                  <Text style={[styles.wordsLearnedLabel, { color: theme.textSecondary }]}>
+                    words mastered
+                  </Text>
+                </View>
+              </View>
+              {wordsLearned.recentlyMastered.length > 0 && (
+                <View style={styles.recentlyMasteredRow}>
+                  <Text style={[styles.recentlyLabel, { color: theme.textSecondary }]}>
+                    Recent:
+                  </Text>
+                  <View style={styles.recentlyPills}>
+                    {wordsLearned.recentlyMastered.map((w) => (
+                      <TouchableOpacity
+                        key={w}
+                        style={[styles.learnAgainPill, { backgroundColor: theme.surface }]}
+                        onPress={() => handleLearnAgain(w)}
+                        disabled={learnAgainLoading === w}
+                      >
+                        <Text style={[styles.learnAgainPillText, { color: theme.text }]}>{w}</Text>
+                        <Text style={[styles.learnAgainPillPlus, { color: theme.accent }]}>
+                          {learnAgainLoading === w ? "…" : "learn again"}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+
           {/* Conversations */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Conversations</Text>
 
-            {/* Chris */}
+            {/* Chris — always available */}
             <View style={[styles.personaRow, { backgroundColor: theme.cardBackground }]}>
-              <TouchableOpacity style={{ flex: 1, flexDirection: "row", alignItems: "center" }} activeOpacity={0.65} onPress={handleStartChat}>
+              <TouchableOpacity style={{ flex: 1, flexDirection: "row", alignItems: "center" }} activeOpacity={0.65} onPress={() => handleStartChat("chris")}>
                 <PersonaAvatar personaId="chris" size={54} />
                 <View style={styles.personaContent}>
                   <View style={styles.personaTopRow}>
@@ -342,22 +466,52 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
               </TouchableOpacity>
             </View>
 
-            {/* Locked personas — greyed out, tap triggers paywall */}
+            {/* Premium personas — unlocked for Pro, paywall for free */}
             {PERSONAS.filter((p) => p.id !== "chris").map((persona) => (
               <View
                 key={persona.id}
-                style={[styles.personaRow, styles.personaRowLocked, { backgroundColor: theme.cardBackground }]}
+                style={[
+                  styles.personaRow,
+                  !isPro && styles.personaRowLocked,
+                  { backgroundColor: theme.cardBackground },
+                ]}
               >
                 <TouchableOpacity
                   style={{ flex: 1, flexDirection: "row", alignItems: "center" }}
-                  activeOpacity={0.7}
-                  onPress={() => handleLockedPersonaTap(persona.displayName)}
+                  activeOpacity={isPro ? 0.65 : 0.7}
+                  onPress={() =>
+                    isPro
+                      ? handleStartChat(persona.id)
+                      : handleLockedPersonaTap(persona.displayName)
+                  }
                 >
                   <PersonaAvatar personaId={persona.id} size={54} />
                   <View style={styles.personaContent}>
-                    <Text style={[styles.personaName, { color: theme.text }]}>{persona.displayName}</Text>
-                    <Text style={[styles.personaPreview, { color: theme.textSecondary }]} numberOfLines={1}>
-                      {persona.tagline}
+                    <View style={styles.personaTopRow}>
+                      <Text style={[styles.personaName, { color: theme.text }]}>{persona.displayName}</Text>
+                      {!isPro && (
+                        <View style={[styles.premiumLockBadge, { backgroundColor: theme.surface }]}>
+                          <Text style={[styles.premiumLockText, { color: theme.accentSecondary }]}>Pro</Text>
+                        </View>
+                      )}
+                      {isPro && hasActiveSession && activePersonaId === persona.id && (
+                        <Text style={[styles.timeLabel, { color: theme.accent }]}>Now</Text>
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        styles.personaPreview,
+                        { color: theme.textSecondary },
+                        isPro && hasActiveSession && activePersonaId === persona.id && {
+                          color: theme.text,
+                          fontWeight: "500",
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {isPro && hasActiveSession && activePersonaId === persona.id
+                        ? activeSessionPreview || "Resume your conversation"
+                        : persona.tagline}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -429,7 +583,17 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         onClose={() => setShowUpgrade(false)}
         onUpgrade={() => setShowUpgrade(false)}
         theme={theme}
+        isPremium={isPro}
         personaName={upgradePersonaName}
+        contextKey={upgradePersonaName ? "persona" : "daily_limit"}
+      />
+
+      <DevPanel
+        visible={showDevPanel}
+        onClose={() => setShowDevPanel(false)}
+        theme={theme}
+        userId={user?.id ?? ""}
+        wordListId={user?.activeWordListId ?? ""}
       />
     </View>
   );
@@ -459,6 +623,15 @@ const styles = StyleSheet.create({
   greetingSub: {
     fontFamily: FONT_FAMILIES.body,
     fontSize: 15,
+  },
+  devBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  devBtnText: {
+    fontFamily: FONT_FAMILIES.bodySemiBold,
+    fontSize: 11,
   },
   settingsBtn: {
     width: 42,
@@ -504,6 +677,58 @@ const styles = StyleSheet.create({
   },
 
   scroll: { flex: 1 },
+  wordsLearnedCard: {
+    flexDirection: "row",
+    gap: 24,
+    padding: 16,
+    borderRadius: 14,
+    marginBottom: 12,
+  },
+  wordsLearnedRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 6,
+  },
+  wordsLearnedStat: {
+    fontFamily: FONT_FAMILIES.display,
+    fontSize: 24,
+  },
+  wordsLearnedLabel: {
+    fontFamily: FONT_FAMILIES.body,
+    fontSize: 15,
+  },
+  recentlyMasteredRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+  },
+  recentlyLabel: {
+    fontFamily: FONT_FAMILIES.body,
+    fontSize: 14,
+    marginRight: 4,
+  },
+  recentlyPills: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  learnAgainPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  learnAgainPillText: {
+    fontFamily: FONT_FAMILIES.bodySemiBold,
+    fontSize: 14,
+  },
+  learnAgainPillPlus: {
+    fontFamily: FONT_FAMILIES.body,
+    fontSize: 12,
+  },
   section: {
     paddingTop: 28,
     paddingHorizontal: 16,
@@ -523,7 +748,17 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginBottom: 10,
   },
-  personaRowLocked: { opacity: 0.5 },
+  personaRowLocked: { opacity: 0.65 },
+  premiumLockBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  premiumLockText: {
+    fontFamily: FONT_FAMILIES.bodySemiBold,
+    fontSize: 10,
+    letterSpacing: 0.5,
+  },
   avatar: {
     alignItems: "center",
     justifyContent: "center",

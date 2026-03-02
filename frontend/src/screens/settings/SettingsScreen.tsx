@@ -9,6 +9,7 @@ import {
   Animated,
   Alert,
   Switch,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
@@ -16,23 +17,39 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/RootNavigator";
 import { useTheme } from "../../hooks/useTheme";
 import { useAuth } from "../../hooks/useAuth";
+import { usePurchases } from "../../hooks/usePurchases";
 import { FONT_FAMILIES } from "../../config/fonts";
+import RevenueCatUI from "react-native-purchases-ui";
+import { restorePurchases, hasProEntitlement } from "../../services/purchases";
 import UpgradePrompt from "../../components/UpgradePrompt";
 import { firestore } from "../../services/firebase";
 import { doc, getDoc } from "firebase/firestore";
+import { updateUserPreferences } from "../../services/firestore";
+import { deleteUserAccountCloud } from "../../services/accountDeletion";
+import type { ThemeName } from "../../config/theme";
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, "Settings">;
 };
 
+const THEME_OPTIONS: { id: ThemeName; label: string }[] = [
+  { id: "lapis", label: "Lapis" },
+  { id: "obsidian", label: "Obsidian" },
+  { id: "porcelain", label: "Porcelain" },
+  { id: "system", label: "System" },
+];
+
 export default function SettingsScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
-  const { theme } = useTheme();
+  const { theme, themeName, setTheme } = useTheme();
   const { user, signOut } = useAuth();
+  const { isPro, refresh } = usePurchases();
 
   const [wordListName, setWordListName] = useState("");
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [showThemePicker, setShowThemePicker] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -54,6 +71,28 @@ export default function SettingsScreen({ navigation }: Props) {
       }
     })();
   }, [user]);
+
+  // Sync Firestore theme only on initial load—don't overwrite manual selections.
+  const hasAppliedInitialTheme = useRef(false);
+  useEffect(() => {
+    const preferred = user?.preferences?.themeName as ThemeName | undefined;
+    if (!preferred || hasAppliedInitialTheme.current) return;
+    hasAppliedInitialTheme.current = true;
+    setTheme(preferred);
+  }, [user?.preferences?.themeName, setTheme]);
+
+  const handleThemeSelect = async (name: ThemeName) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setTheme(name);
+    setShowThemePicker(false);
+    if (user?.id) {
+      try {
+        await updateUserPreferences(user.id, { themeName: name });
+      } catch (e) {
+        console.warn("Failed to save theme:", e);
+      }
+    }
+  };
 
   const handleBack = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -93,8 +132,15 @@ export default function SettingsScreen({ navigation }: Props) {
                   text: "Delete Forever",
                   style: "destructive",
                   onPress: async () => {
-                    await signOut();
+                    try {
+                      await deleteUserAccountCloud();
+                    } catch (e) {
+                      console.error("Account deletion failed:", e);
+                      Alert.alert("Error", "Could not delete account. Please try again.");
+                      return;
+                    }
                     navigation.reset({ index: 0, routes: [{ name: "Welcome" }] });
+                    signOut(); // Clear local auth state (Cloud Function already deleted Auth user)
                   },
                 },
               ]
@@ -105,7 +151,7 @@ export default function SettingsScreen({ navigation }: Props) {
     );
   };
 
-  const isPremium = user?.tier === "premium";
+  const isPremium = isPro;
   const initial = (user?.name || "U").charAt(0).toUpperCase();
 
   return (
@@ -164,13 +210,22 @@ export default function SettingsScreen({ navigation }: Props) {
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>PREFERENCES</Text>
             <View style={[styles.group, { borderColor: "rgba(0,0,0,0.08)" }]}>
-              <View style={[styles.settingItem, { backgroundColor: theme.cardBackground }]}>
+              <TouchableOpacity
+                style={[styles.settingItem, { backgroundColor: theme.cardBackground }]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setShowThemePicker(true);
+                }}
+              >
                 <View style={styles.settingLeft}>
                   <Text style={[styles.settingLabel, { color: theme.text }]}>Theme</Text>
                 </View>
-                <Text style={[styles.settingValue, { color: theme.textSecondary }]}>Lapis</Text>
+                <Text style={[styles.settingValue, { color: theme.textSecondary }]}>
+                  {THEME_OPTIONS.find((o) => o.id === themeName)?.label ?? themeName}
+                </Text>
                 <Text style={[styles.chevron, { color: theme.textSecondary }]}>›</Text>
-              </View>
+              </TouchableOpacity>
 
               <View style={[styles.divider, { backgroundColor: "rgba(0,0,0,0.06)" }]} />
 
@@ -210,11 +265,26 @@ export default function SettingsScreen({ navigation }: Props) {
               <TouchableOpacity
                 style={[styles.settingItem, { backgroundColor: theme.cardBackground }]}
                 activeOpacity={0.7}
-                onPress={() => setShowUpgrade(true)}
+                onPress={async () => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  if (isPremium) {
+                    try {
+                      await RevenueCatUI.presentCustomerCenter();
+                    } catch (e) {
+                      console.warn("Customer Center:", e);
+                    }
+                  } else {
+                    setShowUpgrade(true);
+                  }
+                }}
               >
                 <View style={styles.settingLeft}>
-                  <Text style={[styles.settingLabel, { color: theme.text }]}>Upgrade to Premium</Text>
-                  <Text style={[styles.settingSublabel, { color: theme.textSecondary }]}>8 chats daily, all personas</Text>
+                  <Text style={[styles.settingLabel, { color: theme.text }]}>
+                    {isPremium ? "Manage Subscription" : "Upgrade to Premium"}
+                  </Text>
+                  <Text style={[styles.settingSublabel, { color: theme.textSecondary }]}>
+                    {isPremium ? "Cancel, change plan, restore purchases" : "8 chats daily, all personas"}
+                  </Text>
                 </View>
                 <Text style={[styles.chevron, { color: theme.textSecondary }]}>›</Text>
               </TouchableOpacity>
@@ -224,9 +294,30 @@ export default function SettingsScreen({ navigation }: Props) {
               <TouchableOpacity
                 style={[styles.settingItem, { backgroundColor: theme.cardBackground }]}
                 activeOpacity={0.7}
+                disabled={restoreLoading}
+                onPress={async () => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setRestoreLoading(true);
+                  try {
+                    const info = await restorePurchases();
+                    await refresh();
+                    if (hasProEntitlement(info)) {
+                      Alert.alert("Restore Complete", "Your subscription has been restored.");
+                    } else {
+                      Alert.alert("No Purchases Found", "No active subscription to restore.");
+                    }
+                  } catch (e) {
+                    Alert.alert("Restore Failed", e instanceof Error ? e.message : "Something went wrong.");
+                  } finally {
+                    setRestoreLoading(false);
+                  }
+                }}
               >
                 <View style={styles.settingLeft}>
                   <Text style={[styles.settingLabel, { color: theme.text }]}>Restore Purchases</Text>
+                  <Text style={[styles.settingSublabel, { color: theme.textSecondary }]}>
+                    Restore previous subscription
+                  </Text>
                 </View>
                 <Text style={[styles.chevron, { color: theme.textSecondary }]}>›</Text>
               </TouchableOpacity>
@@ -304,7 +395,43 @@ export default function SettingsScreen({ navigation }: Props) {
         onClose={() => setShowUpgrade(false)}
         onUpgrade={() => setShowUpgrade(false)}
         theme={theme}
+        contextKey="settings"
       />
+
+      <Modal
+        visible={showThemePicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowThemePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowThemePicker(false)}
+          />
+          <View
+            style={[styles.themePicker, { backgroundColor: theme.cardBackground }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <Text style={[styles.themePickerTitle, { color: theme.text }]}>Theme</Text>
+            {THEME_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.id}
+                style={[
+                  styles.themeOption,
+                  opt.id === themeName && { backgroundColor: theme.surface },
+                ]}
+                onPress={() => handleThemeSelect(opt.id)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.themeOptionText, { color: theme.text }]}>{opt.label}</Text>
+                {opt.id === themeName && <Text style={{ color: theme.accent }}>✓</Text>}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -445,5 +572,37 @@ const styles = StyleSheet.create({
     fontFamily: FONT_FAMILIES.body,
     fontSize: 16,
     color: "#FF3B30",
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  themePicker: {
+    width: "100%",
+    maxWidth: 320,
+    borderRadius: 16,
+    padding: 20,
+  },
+  themePickerTitle: {
+    fontFamily: FONT_FAMILIES.display,
+    fontSize: 20,
+    marginBottom: 16,
+  },
+  themeOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    marginBottom: 4,
+  },
+  themeOptionText: {
+    fontFamily: FONT_FAMILIES.body,
+    fontSize: 17,
   },
 });

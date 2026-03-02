@@ -3,6 +3,9 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import * as admin from "firebase-admin";
 import { createSession as createSessionHandler } from "./chat/sessionManager";
 import { sendMessage as sendMessageHandler } from "./chat/messageHandler";
+import { deleteUserAccount } from "./user/accountDeletion";
+import { createRevenueCatWebhookHandler } from "./webhooks/revenueCat";
+import { sendDailyNotifications } from "./notifications/dailyNotifications";
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -10,6 +13,10 @@ setGlobalOptions({ region: "us-central1" });
 
 // Export Firestore instance for use in other modules
 export const db = admin.firestore();
+
+// RevenueCat webhook: sync subscription status to Firestore tier
+// Configure URL in RevenueCat Dashboard → Integrations → Webhooks
+export const revenueCatWebhook = createRevenueCatWebhookHandler(db);
 
 export const helloWorld = onRequest((request, response) => {
   response.send("Hello");
@@ -101,3 +108,19 @@ export const sendChatMessage = onCall(
     }
   }
 );
+
+export { sendDailyNotifications };
+
+export const deleteAccount = onCall(async (request) => {
+  const context = request.auth;
+  if (!context) {
+    throw new HttpsError("unauthenticated", "Must be signed in to delete account");
+  }
+  try {
+    await deleteUserAccount(db, admin.auth(), context.uid);
+    return { success: true };
+  } catch (error) {
+    console.error("Account deletion error:", error);
+    throw new HttpsError("internal", "Failed to delete account");
+  }
+});

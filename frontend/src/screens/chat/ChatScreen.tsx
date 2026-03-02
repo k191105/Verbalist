@@ -20,12 +20,13 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../navigation/RootNavigator";
 import { useTheme } from "../../hooks/useTheme";
 import { useAuth } from "../../hooks/useAuth";
-import WordBagOverlay from "../../components/WordBagOverlay";
+import WordBagOverlay, { type WordBagDisplayItem } from "../../components/WordBagOverlay";
 import WordDefinitionIsland from "../../components/WordDefinitionIsland";
 import { startChatSession, sendUserMessage } from "../../services/chat";
 
 type ChatScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, "Chat">;
+  route: { params?: { personaId?: string } };
 };
 
 interface Message {
@@ -42,25 +43,42 @@ interface Message {
   retryMessageId?: string;
 }
 
-interface WordBagItem {
-  word: string;
-  confidence: number;
-}
-
 interface BackendWordBagItem {
   word: string;
   targetUseCount: number;
   currentUseCount: number;
+  selectionReason?: "due" | "new" | "random";
 }
 
-/** Convert backend word bag to display format */
-function toDisplayWordBag(items: BackendWordBagItem[]): WordBagItem[] {
-  return items.map((item) => ({
-    word: item.word,
-    confidence: item.targetUseCount > 0
-      ? item.currentUseCount / item.targetUseCount
-      : 0,
-  }));
+interface SRSStateForDisplay {
+  word: string;
+  bucket: number;
+  reviewCount: number;
+  correctUses: number;
+  confidence: number;
+  lastReviewed: string;
+}
+
+/** Convert backend word bag + optional SRS states to overlay display format */
+function toDisplayWordBag(
+  items: BackendWordBagItem[],
+  srsStates?: SRSStateForDisplay[]
+): WordBagDisplayItem[] {
+  const srsByWord = new Map<string, SRSStateForDisplay>();
+  srsStates?.forEach((s) => srsByWord.set(s.word.toLowerCase(), s));
+
+  return items.map((item) => {
+    const srs = srsByWord.get(item.word.toLowerCase());
+    const sessionConfidence =
+      item.targetUseCount > 0 ? item.currentUseCount / item.targetUseCount : 0;
+    return {
+      word: item.word,
+      confidence: sessionConfidence,
+      bucket: srs?.bucket,
+      reviewCount: srs?.reviewCount,
+      correctUses: srs?.correctUses,
+    };
+  });
 }
 
 // Toast component for success message
@@ -367,7 +385,13 @@ function TimeStamp({ timestamp, isUser, theme }: { timestamp: Date; isUser: bool
   );
 }
 
-export default function ChatScreen({ navigation }: ChatScreenProps) {
+const VALID_PERSONAS = ["chris", "gemma", "eva", "sid"] as const;
+
+export default function ChatScreen({ navigation, route }: ChatScreenProps) {
+  const requestedPersona = route?.params?.personaId;
+  const personaId = requestedPersona && VALID_PERSONAS.includes(requestedPersona as any)
+    ? requestedPersona
+    : "chris";
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { user } = useAuth();
@@ -392,6 +416,7 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
   const [selectedWord, setSelectedWord] = useState("");
   const [showWordIsland, setShowWordIsland] = useState(false);
   const [suggestedWords, setSuggestedWords] = useState<string[]>([]);
+  const [srsStates, setSrsStates] = useState<SRSStateForDisplay[]>([]);
   const flatListRef = useRef<FlatList>(null);
 
   // Initialize chat session on mount
@@ -411,11 +436,33 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
 
         if (cancelled) return;
 
-        if (activeSession) {
-          // Resume existing session
+        if (activeSession && activeSession.personaId === personaId) {
           setSessionId(activeSession.sessionId);
           setBackendWordBag(activeSession.wordBag);
-          setWordBag(toDisplayWordBag(activeSession.wordBag));
+          const words = activeSession.wordBag.map((w: any) => w.word);
+          const { getSRSStates } = await import("../../services/firestore");
+          const { doc, getDoc } = await import("firebase/firestore");
+          const { firestore } = await import("../../services/firebase");
+          let srs: SRSStateForDisplay[] = [];
+          try {
+            const userDoc = await getDoc(doc(firestore, "users", user!.id));
+            const wordListId = userDoc.data()?.activeWordListId;
+            if (wordListId && words.length > 0) {
+              const states = await getSRSStates(user!.id, wordListId, words);
+              srs = states.map((s) => ({
+                word: s.word,
+                bucket: s.bucket,
+                reviewCount: s.reviewCount,
+                correctUses: s.correctUses,
+                confidence: s.confidence,
+                lastReviewed: s.lastReviewed?.toDate?.()?.toISOString?.() ?? "",
+              }));
+            }
+          } catch {
+            // Non-critical
+          }
+          setSrsStates(srs);
+          setWordBag(toDisplayWordBag(activeSession.wordBag, srs));
 
           const targetWords = activeSession.wordBag.map((w: any) => w.word);
           const restoredMessages: Message[] = activeSession.messages.map((msg: any) => ({
@@ -427,14 +474,31 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
           }));
           setMessages(restoredMessages);
         } else {
-          // Create new session
-          const result = await startChatSession("chris", user!.activeWordListId);
+          const result = await startChatSession(personaId, user!.activeWordListId);
 
           if (cancelled) return;
 
           setSessionId(result.sessionId);
           setBackendWordBag(result.wordBag);
-          setWordBag(toDisplayWordBag(result.wordBag));
+          const words = result.wordBag.map((w) => w.word);
+          let srs: SRSStateForDisplay[] = [];
+          try {
+            const { getSRSStates } = await import("../../services/firestore");
+            srs = (await getSRSStates(user!.id, user!.activeWordListId, words)).map(
+              (s) => ({
+                word: s.word,
+                bucket: s.bucket,
+                reviewCount: s.reviewCount,
+                correctUses: s.correctUses,
+                confidence: s.confidence,
+                lastReviewed: s.lastReviewed?.toDate?.()?.toISOString?.() ?? "",
+              })
+            );
+          } catch {
+            // Non-critical
+          }
+          setSrsStates(srs);
+          setWordBag(toDisplayWordBag(result.wordBag, srs));
 
           // Display the first message from the AI
           const targetWords = result.wordBag.map((w) => w.word);
@@ -461,7 +525,7 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
 
     initSession();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, personaId]);
 
   const showSuccessToast = (message: string) => {
     setToastMessage(message);
@@ -570,7 +634,15 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
         }
 
         setBackendWordBag(result.updatedWordBag);
-        setWordBag(toDisplayWordBag(result.updatedWordBag));
+        if (result.srsStates?.length) {
+          setSrsStates(result.srsStates);
+        }
+        setWordBag(
+          toDisplayWordBag(
+            result.updatedWordBag,
+            result.srsStates ?? undefined
+          )
+        );
         setSessionStatus(result.sessionStatus);
 
         if (result.suggestedWords?.length) {
@@ -682,7 +754,13 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
         }
 
         setBackendWordBag(result.updatedWordBag);
-        setWordBag(toDisplayWordBag(result.updatedWordBag));
+        if (result.srsStates?.length) setSrsStates(result.srsStates);
+        setWordBag(
+          toDisplayWordBag(
+            result.updatedWordBag,
+            result.srsStates ?? undefined
+          )
+        );
         setSessionStatus(result.sessionStatus);
 
         if (result.suggestedWords?.length) {
@@ -714,11 +792,29 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
     setError(null);
     setLoading(true);
     if (!user) return;
-    startChatSession("chris", user.activeWordListId)
-      .then((result) => {
+    startChatSession(personaId, user.activeWordListId)
+      .then(async (result) => {
         setSessionId(result.sessionId);
         setBackendWordBag(result.wordBag);
-        setWordBag(toDisplayWordBag(result.wordBag));
+        const words = result.wordBag.map((w) => w.word);
+        let srs: SRSStateForDisplay[] = [];
+        try {
+          const { getSRSStates } = await import("../../services/firestore");
+          srs = (await getSRSStates(user.id, user.activeWordListId, words)).map(
+            (s) => ({
+              word: s.word,
+              bucket: s.bucket,
+              reviewCount: s.reviewCount,
+              correctUses: s.correctUses,
+              confidence: s.confidence,
+              lastReviewed: s.lastReviewed?.toDate?.()?.toISOString?.() ?? "",
+            })
+          );
+        } catch {
+          // Non-critical
+        }
+        setSrsStates(srs);
+        setWordBag(toDisplayWordBag(result.wordBag, srs));
         const targetWords = result.wordBag.map((w) => w.word);
         const firstMsg: Message = {
           id: "first-" + Date.now(),

@@ -26,6 +26,9 @@
       "predictiveBackGestureEnabled": false
     },
     "extra": {
+      "eas": {
+        "projectId": "verbalist-19"
+      },
       "firebase": {
         "apiKey": "AIzaSyDijEb3wEYbGhul_gEGWOW2FHZD4QIvu8k",
         "authDomain": "verbalist-19.firebaseapp.com",
@@ -40,7 +43,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "sounds": [],
+          "icon": "./assets/icon.png"
+        }
+      ]
     ]
   }
 }

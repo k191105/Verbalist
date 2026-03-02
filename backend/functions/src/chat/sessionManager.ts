@@ -1,5 +1,6 @@
 import * as admin from "firebase-admin";
 import { generateFirstMessage } from "../llm/openai";
+import { selectWordBag } from "./wordBagSelector";
 
 // Constants (inlined to avoid cross-directory import issues during build)
 const WORD_BAG_SIZE = {
@@ -23,6 +24,7 @@ interface WordBagItem {
   word: string;
   targetUseCount: number;
   currentUseCount: number;
+  selectionReason?: "due" | "new" | "random";
 }
 
 interface ChatSession {
@@ -75,21 +77,16 @@ function checkDailyLimit(
 }
 
 /**
- * Select random words for the word bag (no SRS yet)
+ * Create a word bag with target use counts and optional selection reason
  */
-function selectRandomWords(words: string[], count: number): string[] {
-  const shuffled = [...words].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-}
-
-/**
- * Create a word bag with target use counts
- */
-function createWordBag(words: string[]): WordBagItem[] {
-  return words.map((word) => ({
+function createWordBag(
+  selected: Array<{ word: string; reason?: "due" | "new" | "random" }>
+): WordBagItem[] {
+  return selected.map(({ word, reason }) => ({
     word,
     targetUseCount: 1,
     currentUseCount: 0,
+    selectionReason: reason,
   }));
 }
 
@@ -194,22 +191,30 @@ export async function createSession(
 
   const wordList = wordListData as WordList;
 
+  // Fetch user's priority words (for SRS selection)
+  const priorityWords: string[] = userData.priorityWords || [];
+
   // Handle edge case: empty or very short word lists
-  let selectedWords: string[];
+  let selectedWords: Array<{ word: string; reason?: "due" | "new" | "random" }>;
   if (wordList.words.length === 0) {
-    // Empty word list → no target words, just conversation
     selectedWords = [];
   } else if (wordList.words.length < WORD_BAG_SIZE.min) {
-    // Fewer words than minimum → use all available words
-    selectedWords = wordList.words;
+    selectedWords = wordList.words.map((w) => ({ word: w, reason: "new" as const }));
   } else {
-    // Normal case: select random words for the word bag (3-5 words)
     const bagSize =
       Math.floor(Math.random() * (WORD_BAG_SIZE.max - WORD_BAG_SIZE.min + 1)) +
       WORD_BAG_SIZE.min;
-    selectedWords = selectRandomWords(wordList.words, bagSize);
+    const selected = await selectWordBag(
+      db,
+      userId,
+      wordListId,
+      wordList.words,
+      bagSize,
+      priorityWords
+    );
+    selectedWords = selected;
   }
-  
+
   const wordBag = createWordBag(selectedWords);
 
   // Create the session document

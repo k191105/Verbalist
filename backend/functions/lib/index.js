@@ -33,17 +33,24 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.sendChatMessage = exports.createChatSession = exports.helloWorld = exports.db = void 0;
+exports.deleteAccount = exports.sendDailyNotifications = exports.sendChatMessage = exports.createChatSession = exports.helloWorld = exports.revenueCatWebhook = exports.db = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const v2_1 = require("firebase-functions/v2");
 const admin = __importStar(require("firebase-admin"));
 const sessionManager_1 = require("./chat/sessionManager");
 const messageHandler_1 = require("./chat/messageHandler");
+const accountDeletion_1 = require("./user/accountDeletion");
+const revenueCat_1 = require("./webhooks/revenueCat");
+const dailyNotifications_1 = require("./notifications/dailyNotifications");
+Object.defineProperty(exports, "sendDailyNotifications", { enumerable: true, get: function () { return dailyNotifications_1.sendDailyNotifications; } });
 // Initialize Firebase Admin SDK
 admin.initializeApp();
 (0, v2_1.setGlobalOptions)({ region: "us-central1" });
 // Export Firestore instance for use in other modules
 exports.db = admin.firestore();
+// RevenueCat webhook: sync subscription status to Firestore tier
+// Configure URL in RevenueCat Dashboard → Integrations → Webhooks
+exports.revenueCatWebhook = (0, revenueCat_1.createRevenueCatWebhookHandler)(exports.db);
 exports.helloWorld = (0, https_1.onRequest)((request, response) => {
     response.send("Hello");
 });
@@ -90,6 +97,20 @@ exports.sendChatMessage = (0, https_1.onCall)({ secrets: ["OPENAI_API_KEY"] }, a
     catch (error) {
         console.error("Error sending message:", error);
         throw new https_1.HttpsError("internal", "Failed to send message");
+    }
+});
+exports.deleteAccount = (0, https_1.onCall)(async (request) => {
+    const context = request.auth;
+    if (!context) {
+        throw new https_1.HttpsError("unauthenticated", "Must be signed in to delete account");
+    }
+    try {
+        await (0, accountDeletion_1.deleteUserAccount)(exports.db, admin.auth(), context.uid);
+        return { success: true };
+    }
+    catch (error) {
+        console.error("Account deletion error:", error);
+        throw new https_1.HttpsError("internal", "Failed to delete account");
     }
 });
 //# sourceMappingURL=index.js.map

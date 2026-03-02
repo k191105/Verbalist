@@ -1,4 +1,7 @@
-import { NavigationContainer } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+} from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import WelcomeScreen from "../screens/onboarding/WelcomeScreen";
 import WordListSelectionScreen from "../screens/onboarding/WordListSelectionScreen";
@@ -30,7 +33,7 @@ export type RootStackParamList = {
     words: string[];
   };
   AccountSetup: undefined;
-  Chat: undefined;
+  Chat: { personaId?: string } | undefined;
   Dashboard: undefined;
   PastChat: { sessionId: string };
   PersonaDetail: { personaId: string };
@@ -40,11 +43,31 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export default function RootNavigator() {
-  const { theme } = useTheme();
+export const navigationRef =
+  createNavigationContainerRef<RootStackParamList>();
 
+export function navigateToChatFromNotification(personaId: string) {
+  if (navigationRef.isReady()) {
+    navigationRef.navigate("Chat", { personaId });
+    return true;
+  }
+  return false;
+}
+
+/** Retry navigation until ref is ready (for app launched from killed state). */
+export function navigateToChatFromNotificationWhenReady(personaId: string) {
+  const attempt = (attempts = 0) => {
+    if (navigateToChatFromNotification(personaId)) return;
+    if (attempts < 10) {
+      setTimeout(() => attempt(attempts + 1), 500);
+    }
+  };
+  attempt();
+}
+
+export default function RootNavigator() {
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         initialRouteName="Welcome"
         screenOptions={{
