@@ -12,6 +12,9 @@ export interface User {
   tier: UserTier;
   dailyUsageCount: number;
   lastResetDate: string;
+  bonusChatsEarned: number;  // Reset daily, earned by mastering all words
+  bonusChatsUsed: number;    // Reset daily, tracks bonus chat usage
+  lastActiveSessionId?: string; // For session recovery after app close
   customInstructions?: string;
   preferences: {
     theme: "light" | "dark";

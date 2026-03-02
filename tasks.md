@@ -31,7 +31,7 @@
 **Test:** Import and log constants in a test file
 
 - [ ] ~~Create `shared/config/constants.ts` with:~~
-  - Message limits (free: 2/day, premium: 8/day)
+  - Base chat limits (free: 1/day, premium: 5/day) + bonus chats for mastery (free max: 3, premium max: 8)
   - Character limits per message (e.g., 500 chars)
   - Word bag size (3-5 words)
   - Session soft wind-down (e.g., 15 messages) and hard limit (e.g., 20 messages)
@@ -515,7 +515,7 @@
 
 ---
 
-### 6.3 Implement Real-Time Message Listener
+### 6.3 Implement Real-Time Message Listener - IGNORE THIS. We don't have sync messages across devices.
 **Goal:** Sync messages across devices (if user logs in elsewhere)  
 **Test:** Send message, see it appear in Firestore real-time
 
@@ -530,20 +530,130 @@
 
 ---
 
-### 6.4 Implement Word Usage Detection
-**Goal:** Highlight when user uses target words  
-**Test:** Use a target word, see it marked in word bag overlay
+### 6.4 Implement LLM-Guided Word Usage Detection
+**Goal:** Use LLM to score how well user uses target words (1-10 scale)  
+**Test:** Use a target word correctly, see it marked in word bag overlay; use it incorrectly, see no credit
 
-- [ ] In ChatScreen, after sending message:
-  - Check if message contains any words from word bag (case-insensitive)
-  - Pass detected words to backend via sendMessage
-- [ ] Backend updates `wordBag.currentUseCount` for each word
-- [ ] Frontend updates word bag state
-- [ ] In WordBagOverlay, change styling for words that have been used
-- [ ] Test: Use word from bag, refresh overlay, see updated count
+- [x] ~~Add `scoreWordUsage()` in `openai.ts` — calls cheapest model with tiny prompt, returns scores 1-10 per word~~
+- [x] ~~Replace regex-based `detectWordUsage` in `messageHandler.ts` with LLM-based scoring~~
+- [x] ~~Only count a word as "used" if LLM scores it >= 6 (reasonably correct/natural usage)~~
+- [x] ~~Store `wordUsageScores` in message document and return to frontend~~
+- [x] ~~Update `WordBagOverlay` with visual feedback: green bar + checkmark for used words, orange for partial~~
+- [x] ~~Add `wordUsageScores` to frontend `SendMessageResult` type~~
+- [ ] Test: Use word from bag correctly, see overlay update; use it incorrectly, see no credit
 
 **Dependencies:** 6.2, 4.2  
+**Estimated time:** 45 min
+
+---
+
+## Phase 6B: Edge Cases & Robustness
+
+### 6B.1 Handle Non-Engagement & Off-Topic Messages
+**Goal:** Detect when the user isn't engaging meaningfully and steer the conversation  
+**Test:** Send gibberish, single-word replies, or completely off-topic messages — AI adapts gracefully
+
+- [x] Add lightweight engagement classification to `messageHandler.ts`:
+  - **Gibberish/nonsense**: Message is very short random characters, keyboard smashing, etc.
+  - **Minimal effort**: Single word like "ok", "sure", "yeah", "lol", "idk"
+  - **Off-topic derailing**: User tries to get the AI to do something unrelated (e.g. "write me an essay", "ignore your instructions")
+  - **Hostile/inappropriate**: Profanity or abuse directed at the persona
+- [x] Use a simple heuristic check first (message length, dictionary word ratio), NOT an LLM call:
+  - Messages under 3 characters or no dictionary words → likely gibberish
+  - Messages that are a single common filler word → minimal effort
+- [x] Add `engagementHint` field to the AI prompt context:
+  - `"low_effort"`: Instruct the AI to gently re-engage — ask a more specific question, share something interesting, don't mirror the low effort
+  - `"off_topic"`: Instruct the AI to acknowledge briefly and steer back to a natural topic still amenable to the target words.
+  - `"normal"`: No special instructions (default)
+- [x] The persona should NEVER lecture the user about engagement — just naturally try harder to be interesting
+- [x] LLM and human messages should somehow differently typeface target words (bit like how in iMessage they have fancy sort of animations and looks for certain words)
+- [x] LLM messages shouldn't be more than text length. 
+- [x] LLM should still try to use target words in every message; earlier instructions were just to make it not too contrived - it doesn't have to use every message in every message, but should aim for at least one and hopefully more because the word bag is carefully chosen. 
+- [x] To make things feel a bit more normal, see if can split up messages. Instead of one long message, see if can easily with regex split into several messages -  like sometimes maybe if the text ends with a question as a whole sentence move that into a next message. Or if a text starts with like "I get that", or "Totally." or "Hmm" or something like that (use a heuristic) maybe that should be its own text (that doesn't end with punctuation obviously) and then the next text with the rest of the stuff comes in. Max 3 messages though. 
+
+- [x] Test: Send "asdf", "ok", "write me a poem about dogs" — verify AI handles each gracefully
+
+**Dependencies:** 6.2  
+**Estimated time:** 45 min
+
+---
+
+### 6B.2 Guard Against Rapid-Fire / Duplicate Messages
+**Goal:** Prevent the user from sending messages faster than the backend can process them  
+**Test:** Tap send rapidly 5 times — only one message goes through
+
+- [x] ~~Frontend: `isSending` flag already exists — verify it fully blocks the send button AND the text input `onSubmitEditing`~~
+- [x] ~~Frontend: If user taps send while a response is in-flight, silently ignore (no error toast)~~
+- [x] ~~Backend: Add idempotency check — if the last user message in the session has identical content AND was sent within 5 seconds, reject as duplicate~~
+- [x] ~~Test: Rapidly tap send — verify no duplicate messages in Firestore~~
+
+**Dependencies:** 6.2  
+**Estimated time:** 20 min
+
+---
+
+### 6B.3 Handle OpenAI API Failures Gracefully
+**Goal:** If the LLM call fails (timeout, rate limit, outage), the user gets a clear retry path  
+**Test:** Simulate API failure — see friendly error, can retry
+
+- [x] ~~In `messageHandler.ts`, wrap the `generateChatResponse` call in a try/catch~~
+  - ~~On failure: still save the user's message, but return a special `sessionStatus: "error"` with `errorType: "ai_unavailable"`~~
+  - ~~Do NOT increment `messageCount` for the failed exchange~~
+- [x] ~~In `scoreWordUsage`, failures already return `{}` — verify this is truly non-blocking (it is)~~
+- [x] ~~Frontend: If `sessionStatus === "error"`, show a retry button on the last message instead of the AI response~~
+  - ~~Tapping retry re-sends the same user message~~
+  - ~~Show "Couldn't get a response. Tap to retry." inline, not as a toast~~
+- [x] ~~Ensure retry does NOT create a duplicate user message in Firestore~~
+- [x] ~~Test: Temporarily use an invalid API key, send a message, verify retry flow~~
+
+**Dependencies:** 6.2  
 **Estimated time:** 30 min
+
+---
+
+### 6B.4 Handle Empty Word List Edge Case
+**Goal:** Gracefully handle the case where a user's word list is empty or too short  
+**Test:** Create a session with a word list that has fewer words than WORD_BAG_SIZE.min
+
+- [x] ~~In `sessionManager.ts`, if word list has fewer words than `WORD_BAG_SIZE.min`:~~
+  - ~~Use ALL available words (even if < 3)~~
+  - ~~If word list is completely empty, start the conversation with no target words (just a regular conversation)~~
+- [x] ~~The AI prompt should handle `wordBag: []` gracefully — no "target words" instruction if empty~~
+- [x] ~~Frontend: If word bag is empty, hide the word bag button (or show "No target words for this session")~~
+- [x] ~~Test: Create a word list with 1 word, start a session — verify it works~~
+
+**Dependencies:** 5.2, 4.2  
+**Estimated time:** 20 min
+
+---
+
+### 6B.5 Session Recovery After App Crash / Close
+**Goal:** If the user closes the app mid-conversation and reopens, resume the same session  
+**Test:** Start a chat, kill the app, reopen — conversation is restored
+
+- [x] ~~On ChatScreen mount, before creating a new session:~~
+  - ~~Check Firestore for an existing `active` session for this user~~
+  - ~~If found, reload its messages and word bag instead of creating a new session~~
+- [x] ~~Store `lastActiveSessionId` on the user document for quick lookup~~
+- [x] ~~Clear `lastActiveSessionId` when session completes~~
+- [x] ~~Test: Start chat, send 3 messages, force-close app, reopen — see previous messages~~
+
+**Dependencies:** 6.1, 6.2  
+**Estimated time:** 45 min
+
+---
+
+### 6B.6 Validate Session Ownership
+**Goal:** Prevent one user from sending messages to another user's session  
+**Test:** Attempt to send a message to a session belonging to a different user — get rejected
+
+- [x] ~~In `sendChatMessage` Cloud Function, after fetching session, verify `session.userId === auth.uid`~~
+- [x] ~~If mismatch, throw `permission-denied` error~~
+- [x] ~~Same check in `createSession` — verify the word list is either a template or belongs to the requesting user~~
+- [x] ~~Test: Manually craft a request with wrong sessionId — verify rejection~~
+
+**Dependencies:** 5.5, 5.2  
+**Estimated time:** 15 min
 
 ---
 
@@ -553,12 +663,13 @@
 **Goal:** Gracefully end chat when limit approached  
 **Test:** Reach message limit, AI naturally concludes conversation
 
-- [ ] In `sessionManager.ts`, track message count in session
-- [ ] At soft limit (e.g., 15 messages), add instruction to AI prompt:
-  - "This conversation is approaching its natural end. Wrap up gracefully."
-- [ ] At hard limit (e.g., 20 messages), force session completion
-- [ ] Return `shouldWindDown: true` when approaching limit
-- [ ] Test: Have long conversation, verify wind-down behavior
+- [x] ~~In `messageHandler.ts`, wind-down is already partially implemented — verify and refine:~~
+  - ~~At soft limit (15 messages): append wind-down instruction to the AI prompt~~
+  - ~~The AI should wrap up the current thread naturally, not abruptly say "goodbye"~~
+  - ~~At hard limit (20 messages): force session completion, stop accepting new messages~~
+- [x] ~~Return `shouldWindDown: true` in the response when between soft and hard limit so frontend can show a subtle indicator~~
+- [x] ~~Edge case: If user sends a really great message using multiple target words in the wind-down zone, allow 1-2 extra messages as a reward (don't cut off a great exchange)~~
+- [x] ~~Test: Have long conversation, verify AI wraps up naturally around message 15-20~~
 
 **Dependencies:** 5.5  
 **Estimated time:** 30 min
@@ -567,35 +678,46 @@
 
 ### 7.2 Handle Session Completion in ChatScreen
 **Goal:** Show summary and return to dashboard when session ends  
-**Test:** Complete session, see "Session Complete" message, return to dashboard
+**Test:** Complete session, see word mastery summary, return to dashboard
 
-- [ ] In ChatScreen, when `sessionStatus === 'complete'`:
-  - Disable message input
-  - Show banner: "Chat session complete!"
-  - Optionally show word mastery summary (simple for now)
-  - Add button: "Return to Dashboard"
-- [ ] On button press, navigate to DashboardScreen
-- [ ] Test: Complete a session, verify flow
+- [x] ~~In ChatScreen, when `sessionStatus === 'complete'`:~~
+  - ~~Disable message input~~
+  - ~~Show a completion card (not just a banner) with:~~
+    - ~~"Great conversation!" or similar warm message~~
+    - ~~Word mastery summary: list each target word with its final usage score (checkmark for mastered, X for unused)~~
+    - ~~Total words mastered out of bag size (e.g. "3/4 words used correctly")~~
+    - ~~"Return to Dashboard" button~~
+- [x] ~~If the user mastered ALL words in the bag, show a special celebration (subtle confetti or a gold star — keep it tasteful)~~
+- [x] ~~Edge case: If session completes due to hard limit but user was mid-thought, show "Session wrapped up" rather than "complete"~~
+- [x] ~~On button press, navigate to DashboardScreen~~
+- [x] ~~Test: Complete a session where you master all words vs. miss some — verify different summaries~~
 
 **Dependencies:** 6.2, 7.1  
-**Estimated time:** 30 min
+**Estimated time:** 45 min
 
 ---
 
-### 7.3 Implement Daily Usage Limits
-**Goal:** Enforce free tier limits (2 chats/day)  
-**Test:** Complete 2 chats, see upgrade prompt on 3rd attempt
+### 7.3 Implement Daily Usage Limits with Bonus Chat Gamification
+**Goal:** Enforce daily chat limits, but reward mastery with bonus chats  
+**Test:** Complete daily limit, master all words in final chat, unlock a bonus chat
 
-- [ ] In `sessionManager.ts`, check user's `dailyUsageCount` before creating session
-- [ ] If `lastResetDate` is not today, reset count to 0
-- [ ] If count >= tier limit, return error: "Daily limit reached"
-- [ ] Increment count when session completes
-- [ ] In ChatScreen, if create session fails with limit error:
-  - Show upgrade prompt overlay
-- [ ] Test: Complete 2 chats, verify 3rd is blocked
+- [x] ~~In `sessionManager.ts`, check user's `dailyUsageCount` before creating session~~
+- [x] ~~If `lastResetDate` is not today, reset count to 0~~
+- [x] ~~**Free tier (1 base chat/day):**~~
+  - ~~After completing a chat: if user mastered ALL target words (every word scored >= 6), grant 1 bonus chat~~
+  - ~~Bonus chats stack: master the bonus → get another bonus, up to a max of 3 total chats/day~~
+  - ~~Store `bonusChatsEarned` and `bonusChatsUsed` on user doc (reset daily)~~
+- [x] ~~**Premium tier (5 base chats/day):**~~
+  - ~~Same mechanic: master your 5th chat → unlock 6th, master 6th → 7th, up to 8 total/day~~
+  - ~~The mastery bar should be high — ALL words in the bag must be scored >= 6~~
+- [x] ~~If count >= (base limit + bonusChatsEarned - bonusChatsUsed), return error: "Daily limit reached"~~
+- [x] ~~In ChatScreen, if create session fails with limit error:~~
+  - ~~Show upgrade prompt overlay (for free users) or "Come back tomorrow" (for premium at max)~~
+- [x] ~~After session completes with full mastery, show a celebratory message: "You earned a bonus chat!"~~
+- [x] ~~Test: Complete 1 chat as free user mastering all words → verify bonus chat unlocked~~
 
-**Dependencies:** 5.2, 2.2  
-**Estimated time:** 45 min
+**Dependencies:** 5.2, 2.2, 7.2  
+**Estimated time:** 60 min
 
 ---
 
@@ -603,145 +725,147 @@
 **Goal:** Show paywall when limits reached  
 **Test:** Trigger limit, see upgrade UI with RevenueCat placeholder
 
-- [ ] Create `frontend/src/components/UpgradePrompt.tsx`
-- [ ] Display modal with:
-  - "You've reached your daily limit"
-  - Benefits of premium (8 chats/day, all personas, custom instructions)
-  - "Upgrade to Premium" button (placeholder for now)
-  - "Close" button
-- [ ] Style attractively, not aggressive
-- [ ] Show when triggered from ChatScreen
-- [ ] Test: Display component manually
+- [x] ~~Create `frontend/src/components/UpgradePrompt.tsx`~~
+- [x] ~~Display modal with:~~
+  - ~~"You've reached your daily limit" (or "You've used all your chats for today")~~
+  - ~~Show how many chats they completed today and words mastered~~
+  - ~~Explain the bonus mechanic: "Master all your target words to earn extra chats!"~~
+  - ~~Benefits of premium (5 base chats/day, all personas, custom instructions)~~
+  - ~~"Upgrade to Premium" button (placeholder for now)~~
+  - ~~"Close" button~~
+- [x] ~~For premium users at max: show "Come back tomorrow — you've earned your rest!" (positive framing)~~
+- [x] ~~Style attractively, not aggressive — should feel encouraging, not punishing~~
+- [x] ~~Test: Display component manually, verify both free and premium variants~~
 
 **Dependencies:** 7.3  
 **Estimated time:** 30 min
 
 ---
 
+
 ## Phase 8: Dashboard & Navigation
 
 ### 8.1 Create DashboardScreen Layout
-**Goal:** Main hub after onboarding  
-**Test:** Navigate to dashboard, see sections
+**Goal:** Main hub after onboarding — clean, informative, drives daily engagement  
+**Test:** Navigate to dashboard, see sections, feel motivated to start a chat
 
-- [ ] Create `frontend/src/screens/dashboard/DashboardScreen.tsx`
-- [ ] Layout:
-  - **Header**: User name, active word list name
-  - **Active Chats**: List of personas (Chris only for free users)
-  - **Past Chats**: Collapsible list (empty for now)
-  - **Settings Button**: Navigate to SettingsScreen
-- [ ] Fetch user profile from Firestore
-- [ ] Fetch active word list name
-- [ ] Display placeholder for personas
-- [ ] Test: See dashboard with user info
+- [x] ~~Create `frontend/src/screens/dashboard/DashboardScreen.tsx` - Use dashboardMockup.html for this~~
+- [x] ~~Layout:~~
+  - ~~**Header**: Greeting (time-aware: "Good morning, {name}"), active word list name~~
+  - ~~**Daily progress**: Chats used / available, bonus status (from 7.5)~~
+  - ~~**Start Chat CTA**: Prominent button or card to start a new conversation — this is the primary action~~
+  - ~~**Active Session Indicator**: If there's an active (incomplete) session, show "Resume conversation" instead of "Start new chat"~~
+  - ~~**Past Chats**: Collapsible section showing recent completed chats~~
+  - ~~**Settings Button**: Navigate to SettingsScreen~~
+- [x] ~~Fetch user profile from Firestore~~
+- [x] ~~Fetch active word list name~~
+- [x] ~~Check for active sessions (for resume flow from 6B.5)~~
+- [x] ~~Edge case: First-time user with no past chats — show encouraging "Start your first conversation!" prompt~~
+- [x] ~~Test: See dashboard with user info, daily progress, and start chat CTA~~
 
-**Dependencies:** 1.3, 2.2  
-**Estimated time:** 45 min
+**Dependencies:** 1.3. 2.2  
+**Estimated time:** 60 min
 
 ---
 
-### 8.2 Implement Persona Cards
+### 8.2 ~~Implement Persona Cards~~
 **Goal:** Display available personas on dashboard  
 **Test:** See Chris card, tap to start chat
 
-- [ ] Create `frontend/src/components/PersonaCard.tsx`
-- [ ] Display:
-  - Persona name
-  - Expertise description
-  - "Chat" button
-  - Premium badge for locked personas (Gemma, Eva, Sid)
-- [ ] On tap:
-  - If persona is Chris: Navigate to ChatScreen
-  - If premium persona and user is free: Show UpgradePrompt
-- [ ] In DashboardScreen, render PersonaCard for each persona
-- [ ] Free users see 4 cards, 3 locked
-- [ ] Test: Tap Chris, start chat
+- [x] ~~Create `frontend/src/components/PersonaCard.tsx`~~ (integrated into DashboardScreen + PersonaContactCard)
+- [x] ~~Display persona avatar, name, tagline, premium lock badge~~
+- [x] ~~On tap Chris: Navigate to ChatScreen~~
+- [x] ~~On tap locked persona: haptic feedback (upgrade prompt deferred)~~
+- [x] ~~In DashboardScreen, render all 4 personas, 3 locked but visible~~
+- [x] ~~Info button on each persona opens PersonaContactCard modal~~
+- [ ] Edge case: If user has no chats remaining today, tapping should show the limit prompt, not navigate to chat
+- [ ] Test: Tap Chris, start chat; tap locked Gemma, see upgrade prompt
 
 **Dependencies:** 8.1, 0.2  
 **Estimated time:** 45 min
 
 ---
 
-### 8.3 Add Profile/Word List Editor
+### 8.3 ~~Add Profile/Word List Editor~~
 **Goal:** Allow user to change active word list  
 **Test:** Tap header, see profile modal, change word list
 
-- [ ] In DashboardScreen, make header tappable
-- [ ] Show modal with:
-  - User name (editable)
-  - Active word list dropdown
-  - "Save" button
-- [ ] Fetch all word lists (templates + user's custom lists)
-- [ ] On save:
-  - Update user's `activeWordListId` in Firestore
-  - Update user's `name` if changed
-  - Close modal
-- [ ] Test: Change word list, restart chat, verify new words
+- [x] ~~In DashboardScreen, make header word list card tappable~~
+- [x] ~~Show WordListEditorModal with name input, list selection, word preview chips~~
+- [x] ~~On save: update activeWordListId and name in Firestore, close modal~~
+- [ ] Edge case: If user's custom word list was deleted or is corrupted, fall back to `template-general`
+- [ ] Edge case: Changing word list mid-day doesn't affect active sessions — only new sessions use the new list
+- [ ] Test: Change word list, start new chat, verify new words
 
 **Dependencies:** 8.1, 1.3  
 **Estimated time:** 45 min
 
 ---
 
-### 8.4 Implement Past Chats List (Read-Only)
+### 8.4 ~~Implement Past Chats List (Read-Only)~~
 **Goal:** Show completed chat sessions  
 **Test:** Complete a chat, see it in past chats list
 
-- [ ] In DashboardScreen, fetch completed sessions:
-  - Query `chatSessions` where `userId == user.id` and `status == 'complete'`
-  - Order by `completedAt DESC`
-  - Limit to 20
-- [ ] Display as collapsible list:
-  - Persona name
-  - Date completed
-  - Message count
-  - Tap to view transcript (read-only)
-- [ ] Create read-only chat view (same as ChatScreen but no input)
-- [ ] Test: View past chat transcript
+- [x] ~~In DashboardScreen, fetch completed sessions (limit 20, ordered by completedAt DESC)~~
+- [x] ~~Display with persona avatar, name, relative date, word mastery score~~
+- [x] ~~Tap to view transcript: PastChatScreen (read-only, no input bar, no word bag)~~
+- [x] ~~Empty state: "Your conversations will appear here"~~
+- [ ] Edge case: Very long past chats list — implement pagination/infinite scroll (load 10 at a time)
+- [ ] Test: View past chat transcript, verify word mastery score shown
 
 **Dependencies:** 8.1, 5.5  
 **Estimated time:** 60 min
 
 ---
 
+### 8.5 Implement "Words Learned" Summary on Dashboard
+**Goal:** Show the user a motivating snapshot of their vocabulary progress  
+**Test:** After several chats, see word count and recent mastered words on dashboard
+
+- [ ] Add a small section to DashboardScreen below the daily progress:
+  - "X words practiced" total across all sessions
+  - "X words mastered" (scored >= 6 at least once)
+  - List of 3-5 most recently mastered words as subtle pills/chips
+- [ ] Pull from session word bag data (aggregate from completed sessions)
+- [ ] This is pre-SRS — just raw counts from session `wordUsageScores`. SRS (Phase 10) will make this richer later.
+- [ ] Keep it lightweight — no charts yet, just numbers and a few words
+- [ ] Give the user the option to say "learn again" - SRS eventually will do this automatically anyway, but
+ the user can add it to their to learn list immediately as well and this will also guide SRS
+- [ ] Test: Complete a few chats, see stats update
+
+**Dependencies:** 8.1, 7.2  
+**Estimated time:** 30 min
+
+---
+
 ## Phase 9: Settings & Preferences
 
-### 9.1 Create SettingsScreen
+### 9.1 ~~Create SettingsScreen~~
 **Goal:** User can customize app preferences  
 **Test:** Navigate to settings, change theme, see update
 
-- [ ] Create `frontend/src/screens/settings/SettingsScreen.tsx`
-- [ ] Display options:
-  - Theme toggle (light/dark)
-  - Font size picker (small/medium/large)
-  - Chat background (premium, grayed out for free)
-  - Custom instructions (premium, grayed out for free)
-- [ ] Update user preferences in Firestore on change
+- [x] ~~Create `frontend/src/screens/settings/SettingsScreen.tsx` based on settingsMockup.html~~
+- [x] ~~Display grouped settings: Learning (word list link), Preferences (theme, notifications, premium chat bg), Account (upgrade, restore), About (version, privacy, terms, support)~~
+- [x] ~~Dashboard gear button navigates to Settings~~
+- [ ] Update user preferences in Firestore on change (theme picker not yet interactive)
 - [ ] Apply theme change immediately using React Context or state
-- [ ] Add "About" section with app version, links
-- [ ] Test: Change theme, restart app, verify persisted
+- [ ] Persist preferences across sessions
+- [ ] Edge case: "System" theme option follows device light/dark mode
 
 **Dependencies:** 2.2  
 **Estimated time:** 60 min
 
 ---
 
-### 9.2 Add Account Management
+### 9.2 ~~Add Account Management~~
 **Goal:** Show user ID, allow account deletion  
 **Test:** View account details, test logout flow
 
-- [ ] In SettingsScreen, add "Account" section
-- [ ] Display:
-  - User ID (read-only)
-  - Subscription status (free/premium)
-  - "Restore Purchases" button (placeholder)
-  - "Log Out" button
-  - "Delete Account" button (with confirmation)
-- [ ] Implement logout:
-  - Call Firebase Auth signOut()
-  - Clear local state
-  - Navigate to WelcomeScreen
-- [ ] Test: Log out and re-authenticate
+- [x] ~~Account section: profile card, subscription badge, Upgrade to Premium, Restore Purchases~~
+- [x] ~~Sign Out with confirmation dialog → signOut + navigate to Welcome~~
+- [x] ~~Delete Account with double confirmation → signOut + navigate to Welcome~~
+- [ ] Full server-side account deletion (Cloud Function to purge user data)
+- [ ] Edge case: If user is mid-session when they log out, abandon the session
 
 **Dependencies:** 9.1, 2.2  
 **Estimated time:** 30 min
@@ -1162,11 +1286,12 @@
 At this point, Verbalist v1.0 is live with:
 - Full onboarding flow (template + custom word lists)
 - Real-time chat with Chris persona
+- LLM-scored word usage detection (quality, not just presence)
 - Word bag selection with basic SRS
-- Session limits and upgrade prompts
-- Dashboard with past chats
+- Session limits with bonus chat gamification (master words → earn extra chats)
+- Dashboard with past chats and daily progress
 - Settings and preferences
-- Free tier (2 chats/day) and premium tier (8 chats/day, all personas)
+- Free tier (1 base chat/day + bonus) and premium tier (5 base + bonus up to 8, all personas)
 - Push notifications
 - Deployed to app stores
 

@@ -70,7 +70,7 @@ export const sendChatMessage = onCall(
       );
     }
 
-    const { sessionId, message } = data;
+    const { sessionId, message, retryFromMessageId } = data;
 
     if (!sessionId || !message) {
       throw new HttpsError(
@@ -87,7 +87,13 @@ export const sendChatMessage = onCall(
     }
 
     try {
-      const result = await sendMessageHandler(db, sessionId, message);
+      const result = await sendMessageHandler(
+        db,
+        sessionId,
+        message,
+        retryFromMessageId || undefined,
+        context.uid
+      );
       return result;
     } catch (error) {
       console.error("Error sending message:", error);

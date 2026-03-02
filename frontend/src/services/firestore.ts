@@ -70,6 +70,22 @@ export async function createCustomWordList(
   return docRef.id;
 }
 
+export async function updateWordList(
+  wordListId: string,
+  updates: { words?: string[]; name?: string }
+): Promise<void> {
+  const ref = doc(firestore, "wordLists", wordListId);
+  const data: Record<string, unknown> = {};
+  if (updates.words !== undefined) {
+    data.words = updates.words;
+    data.wordCount = updates.words.length;
+  }
+  if (updates.name !== undefined) {
+    data.name = updates.name;
+  }
+  await updateDoc(ref, data);
+}
+
 export async function createAndSetCustomWordList(
   userId: string,
   name: string,

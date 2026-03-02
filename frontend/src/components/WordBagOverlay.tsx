@@ -20,25 +20,36 @@ interface WordBagOverlayProps {
   theme: ThemeColors;
 }
 
+function getConfidenceColor(confidence: number, accent: string): string {
+  if (confidence >= 1) return "#34C759"; // Green — fully used
+  if (confidence > 0) return "#FF9500"; // Orange — partially used
+  return accent; // Default accent — not yet used
+}
+
 function WordItem({ item, theme }: { item: WordBagItem; theme: ThemeColors }) {
+  const isUsed = item.confidence >= 1;
+  const fillColor = getConfidenceColor(item.confidence, theme.accent);
+
   return (
     <View style={[styles.wordItem, { backgroundColor: theme.surface }]}>
-      <Text style={[styles.wordText, { color: theme.text }]}>{item.word}</Text>
+      <View style={styles.wordLabelRow}>
+        <Text style={[styles.wordText, { color: theme.text }, isUsed && styles.wordTextUsed]}>
+          {item.word}
+        </Text>
+        {isUsed && <Text style={styles.checkmark}>✓</Text>}
+      </View>
       <View style={styles.confidenceContainer}>
         <View style={[styles.confidenceBar, { backgroundColor: theme.border }]}>
           <View 
             style={[
               styles.confidenceFill, 
               { 
-                width: `${item.confidence * 100}%`,
-                backgroundColor: theme.accent,
+                width: `${Math.min(item.confidence * 100, 100)}%`,
+                backgroundColor: fillColor,
               }
             ]} 
           />
         </View>
-        <Text style={[styles.confidenceText, { color: theme.textSecondary }]}>
-          {Math.round(item.confidence * 100)}%
-        </Text>
       </View>
     </View>
   );
@@ -179,15 +190,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 14,
   },
+  wordLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: 6,
+  },
   wordText: {
     fontSize: 16,
     fontWeight: "500",
-    flex: 1,
+  },
+  wordTextUsed: {
+    fontWeight: "600",
+  },
+  checkmark: {
+    fontSize: 14,
+    color: "#34C759",
   },
   confidenceContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    alignItems: "flex-end",
   },
   confidenceBar: {
     width: 50,
@@ -198,11 +219,5 @@ const styles = StyleSheet.create({
   confidenceFill: {
     height: "100%",
     borderRadius: 3,
-  },
-  confidenceText: {
-    fontSize: 12,
-    fontWeight: "500",
-    width: 32,
-    textAlign: "right",
   },
 });

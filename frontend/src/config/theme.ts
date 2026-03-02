@@ -43,40 +43,43 @@ export interface ThemeColors {
 // Lapis Theme - Welcome Screen (Default)
 // Elegant cream and blue palette
 const lapis: ThemeColors = {
-  // Base - Creamy warm backgrounds
-  background: "#F6F3E7",      // Rapture's Light
-  surface: "#FAEBD7",         // Milk Tooth
-  surfaceAlt: "#FFFFFF",      // White for message bubbles
-  text: "#0F1939",            // Cosmic Odyssey
-  textSecondary: "#26428B",   // Blue Oblivion
-  textMuted: "#516AC8",       // Sapphire Dust
+  // Base – warm editorial canvas
+  background: "#FFFDED",
+  surface: "#FFF9F0",
+  surfaceAlt: "#FFFFFF",
 
-  // Brand/Accent
-  accent: "#E3AF64",          // Caramel Essence
-  accentSecondary: "#516AC8", // Sapphire Dust
-  accentTertiary: "#26428B",  // Blue Oblivion
+  // Text – neutral hierarchy (not brand-tinted)
+  text: "#0F1939",
+  textSecondary: "#374151",
+  textMuted: "#6B7280",
+
+  // Brand / identity
+  accent: "#E3AF64",          // reserved for focus & key moments
+  accentSecondary: "#26428B", // primary action / user identity
+  accentTertiary: "#516AC8",  // hover / subtle interactive
 
   // Chat
-  bubbleSent: "#26428B",      // Blue Oblivion - user messages
+  bubbleSent: "#26428B",
   bubbleSentText: "#FFFFFF",
-  bubbleReceived: "#FFFFFF",  // White - AI messages (matches onboarding)
-  bubbleReceivedText: "#0F1939",
-  bubbleBorder: "#E3AF64",
 
-  // UI
-  border: "#E3AF64",
-  divider: "#FAEBD7",
+  bubbleReceived: "#FFFEF8",  // lifted from background for depth
+  bubbleReceivedText: "#0F1939",
+  bubbleBorder: "#E5E7EB",    // neutral structural border
+
+  // UI structure (neutral, low-chroma)
+  border: "#D6D3D1",
+  divider: "#E7E5E4",
   inputBackground: "#FFFFFF",
   cardBackground: "#FFFFFF",
 
   // Button
-  buttonBackground: "#26428B", // Blue Oblivion
+  buttonBackground: "#26428B",
   buttonText: "#FFFFFF",
 
-  // Status
-  success: "#10B981",
-  warning: "#E3AF64",
-  error: "#EF4444",
+  // Status (independent of brand)
+  success: "#059669",
+  warning: "#D97706",
+  error: "#DC2626",
 };
 
 // Obsidian Theme - Word List Selection (Dark)

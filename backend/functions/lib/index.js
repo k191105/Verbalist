@@ -76,7 +76,7 @@ exports.sendChatMessage = (0, https_1.onCall)({ secrets: ["OPENAI_API_KEY"] }, a
     if (!context) {
         throw new https_1.HttpsError("unauthenticated", "User must be authenticated to send a message");
     }
-    const { sessionId, message } = data;
+    const { sessionId, message, retryFromMessageId } = data;
     if (!sessionId || !message) {
         throw new https_1.HttpsError("invalid-argument", "sessionId and message are required");
     }
@@ -84,7 +84,7 @@ exports.sendChatMessage = (0, https_1.onCall)({ secrets: ["OPENAI_API_KEY"] }, a
         throw new https_1.HttpsError("invalid-argument", "Message must be a string of 500 characters or fewer");
     }
     try {
-        const result = await (0, messageHandler_1.sendMessage)(exports.db, sessionId, message);
+        const result = await (0, messageHandler_1.sendMessage)(exports.db, sessionId, message, retryFromMessageId || undefined, context.uid);
         return result;
     }
     catch (error) {

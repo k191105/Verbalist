@@ -11,7 +11,6 @@ import {
   Animated,
   Keyboard,
   StatusBar,
-  Alert,
   Pressable,
   ActivityIndicator,
 } from "react-native";
@@ -22,6 +21,7 @@ import type { RootStackParamList } from "../../navigation/RootNavigator";
 import { useTheme } from "../../hooks/useTheme";
 import { useAuth } from "../../hooks/useAuth";
 import WordBagOverlay from "../../components/WordBagOverlay";
+import WordDefinitionIsland from "../../components/WordDefinitionIsland";
 import { startChatSession, sendUserMessage } from "../../services/chat";
 
 type ChatScreenProps = {
@@ -30,10 +30,16 @@ type ChatScreenProps = {
 
 interface Message {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "error";
   content: string;
   timestamp: Date;
   wordUsage?: string[];
+  /** Target words for the session — used for highlighting */
+  targetWords?: string[];
+  /** For error messages: the user message text to retry */
+  retryMessage?: string;
+  /** For error messages: the Firestore message ID to avoid duplicates */
+  retryMessageId?: string;
 }
 
 interface WordBagItem {
@@ -124,51 +130,53 @@ function TypingIndicator({ theme }: { theme: any }) {
   );
 }
 
-// Message Bubble Component with long-press support
+// Message Bubble Component
 function MessageBubble({ 
   message, 
   theme,
+  onWordTap,
   onWordLongPress,
 }: { 
   message: Message; 
   theme: any;
+  onWordTap: (word: string) => void;
   onWordLongPress: (word: string) => void;
 }) {
   const isUser = message.role === "user";
+  const textColor = isUser ? theme.bubbleSentText : theme.bubbleReceivedText;
 
   const handleLongPress = () => {
-    // Extract words from the message (simple word extraction)
     const words = message.content.match(/\b[a-zA-Z]{4,}\b/g) || [];
     if (words.length === 0) return;
-
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    // Show action sheet with word options
-    Alert.alert(
-      "Add Word to List",
-      "Select a word to add to your vocabulary list:",
-      [
-        ...words.slice(0, 5).map((word) => ({
-          text: word.toLowerCase(),
-          onPress: () => onWordLongPress(word.toLowerCase()),
-        })),
-        { text: "Cancel", style: "cancel" as const },
-      ]
-    );
+    const firstInteresting = words.find((w) => w.length >= 5) ?? words[0];
+    if (!firstInteresting) return;
+    onWordLongPress(firstInteresting.toLowerCase());
   };
+
+  const highlightWords = isUser ? message.wordUsage : message.targetWords;
 
   const renderTextWithHighlights = (text: string, words?: string[]) => {
     if (!words || words.length === 0) {
       return <Text>{text}</Text>;
     }
 
-    const regex = new RegExp(`\\b(${words.join("|")})\\b`, "gi");
+    const escaped = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const regex = new RegExp(`\\b(${escaped.join("|")})\\w*\\b`, "gi");
     const parts = text.split(regex);
 
     return parts.map((part, i) => {
-      const isTargetWord = words.some((w) => w.toLowerCase() === part.toLowerCase());
+      const isTargetWord = words.some(
+        (w) => part.toLowerCase().startsWith(w.toLowerCase())
+      );
+      if (!isTargetWord) return <Text key={i}>{part}</Text>;
+
       return (
-        <Text key={i} style={isTargetWord ? styles.highlightedWord : undefined}>
+        <Text
+          key={i}
+          style={[styles.targetWord, { color: textColor }]}
+          onPress={() => onWordTap(part.toLowerCase().replace(/[^a-z]/g, ""))}
+        >
           {part}
         </Text>
       );
@@ -178,7 +186,7 @@ function MessageBubble({
   return (
     <Pressable
       onLongPress={handleLongPress}
-      delayLongPress={400}
+      delayLongPress={500}
       style={[
         styles.bubble, 
         isUser 
@@ -188,13 +196,132 @@ function MessageBubble({
     >
       <Text style={[
         styles.bubbleText, 
-        isUser 
-          ? { color: theme.bubbleSentText }
-          : { color: theme.bubbleReceivedText }
+        { color: textColor }
       ]}>
-        {renderTextWithHighlights(message.content, message.wordUsage)}
+        {renderTextWithHighlights(message.content, highlightWords)}
       </Text>
     </Pressable>
+  );
+}
+
+// Session Completion Card Component
+function SessionCompleteCard({ 
+  wordBag, 
+  suggestedWords,
+  theme, 
+  onClose,
+  onAddSuggestedWord, 
+}: { 
+  wordBag: WordBagItem[]; 
+  suggestedWords: string[];
+  theme: any; 
+  onClose: () => void;
+  onAddSuggestedWord: (word: string) => void;
+}) {
+  const masteredWords = wordBag.filter((w) => w.confidence >= 1);
+  const totalWords = wordBag.length;
+  const [addedWords, setAddedWords] = useState<Set<string>>(new Set());
+
+  const handleAddWord = (word: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setAddedWords((prev) => new Set(prev).add(word));
+    onAddSuggestedWord(word);
+  };
+
+  return (
+    <>
+      <View style={styles.scrim} />
+      
+      <View style={[styles.bottomSheet, { backgroundColor: theme.background }]}>
+        <View style={[styles.pullHandle, { backgroundColor: theme.textSecondary, opacity: 0.15 }]} />
+        
+        <View style={styles.sheetContent}>
+          <Text style={[styles.sheetTitle, { color: theme.text }]}>Session Complete</Text>
+
+          <View style={[styles.divider, { backgroundColor: theme.textSecondary, opacity: 0.08 }]} />
+
+          <View style={styles.completionSection}>
+            <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>Words discussed</Text>
+            <Text style={[styles.sectionContent, { color: theme.text }]}>
+              {wordBag.map((w) => w.word).join(", ")}
+            </Text>
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: theme.textSecondary, opacity: 0.08 }]} />
+
+          <View style={styles.completionSection}>
+            <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>Your progress</Text>
+            <Text style={[styles.sectionContentProgress, { color: theme.text }]}>
+              {masteredWords.length} of {totalWords} words used naturally
+            </Text>
+            {masteredWords.length === totalWords && totalWords > 0 && (
+              <Text style={[styles.bonusMessage, { color: theme.accent }]}>
+                You've earned an additional conversation for today.
+              </Text>
+            )}
+          </View>
+
+          {/* Suggested words to add */}
+          {suggestedWords.length > 0 && (
+            <>
+              <View style={[styles.divider, { backgroundColor: theme.textSecondary, opacity: 0.08 }]} />
+              <View style={styles.completionSection}>
+                <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>Add to your list</Text>
+                <View style={styles.suggestedWordsRow}>
+                  {suggestedWords.map((word) => {
+                    const isAdded = addedWords.has(word);
+                    return (
+                      <TouchableOpacity
+                        key={word}
+                        style={[
+                          styles.suggestedChip,
+                          { borderColor: isAdded ? theme.accent : theme.border },
+                          isAdded && { backgroundColor: "rgba(227,175,100,0.08)" },
+                        ]}
+                        onPress={() => !isAdded && handleAddWord(word)}
+                        activeOpacity={isAdded ? 1 : 0.65}
+                      >
+                        <Text style={[
+                          styles.suggestedChipText,
+                          { color: isAdded ? theme.accent : theme.text },
+                        ]}>
+                          {isAdded ? `✓ ${word}` : `+ ${word}`}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            </>
+          )}
+
+          <View style={[styles.divider, { backgroundColor: theme.textSecondary, opacity: 0.08 }]} />
+
+          <TouchableOpacity
+            style={[styles.returnButton, { backgroundColor: theme.cardBackground, borderColor: theme.textSecondary }]}
+            onPress={onClose}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.returnButtonText, { color: theme.text }]}>Return to conversations</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </>
+  );
+}
+
+// Error / Retry Bubble Component
+function ErrorBubble({ message, theme, onRetry }: { message: Message; theme: any; onRetry: (msg: Message) => void }) {
+  return (
+    <TouchableOpacity
+      style={[styles.errorBubble, { backgroundColor: theme.bubbleReceived }]}
+      onPress={() => onRetry(message)}
+      activeOpacity={0.7}
+    >
+      <Text style={[styles.errorBubbleText, { color: theme.textSecondary }]}>
+        Couldn't get a response. Tap to retry.
+      </Text>
+    </TouchableOpacity>
   );
 }
 
@@ -249,7 +376,7 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [wordBag, setWordBag] = useState<WordBagItem[]>([]);
   const [backendWordBag, setBackendWordBag] = useState<BackendWordBagItem[]>([]);
-  const [sessionStatus, setSessionStatus] = useState<"active" | "complete">("active");
+  const [sessionStatus, setSessionStatus] = useState<"active" | "complete" | "error">("active");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -262,6 +389,9 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
   const [isSending, setIsSending] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
+  const [selectedWord, setSelectedWord] = useState("");
+  const [showWordIsland, setShowWordIsland] = useState(false);
+  const [suggestedWords, setSuggestedWords] = useState<string[]>([]);
   const flatListRef = useRef<FlatList>(null);
 
   // Initialize chat session on mount
@@ -275,26 +405,55 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
         setLoading(true);
         setError(null);
 
-        const result = await startChatSession("chris", user!.activeWordListId);
+        // First, check if there's an active session to resume
+        const { checkActiveSession } = await import("../../services/chat");
+        const activeSession = await checkActiveSession(user!.id);
 
         if (cancelled) return;
 
-        setSessionId(result.sessionId);
-        setBackendWordBag(result.wordBag);
-        setWordBag(toDisplayWordBag(result.wordBag));
+        if (activeSession) {
+          // Resume existing session
+          setSessionId(activeSession.sessionId);
+          setBackendWordBag(activeSession.wordBag);
+          setWordBag(toDisplayWordBag(activeSession.wordBag));
 
-        // Display the first message from the AI
-        const firstMsg: Message = {
-          id: "first-" + Date.now(),
-          role: "assistant",
-          content: result.firstMessage,
-          timestamp: new Date(),
-        };
-        setMessages([firstMsg]);
+          const targetWords = activeSession.wordBag.map((w: any) => w.word);
+          const restoredMessages: Message[] = activeSession.messages.map((msg: any) => ({
+            id: msg.id,
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.timestamp,
+            targetWords: msg.role === "assistant" ? targetWords : undefined,
+          }));
+          setMessages(restoredMessages);
+        } else {
+          // Create new session
+          const result = await startChatSession("chris", user!.activeWordListId);
+
+          if (cancelled) return;
+
+          setSessionId(result.sessionId);
+          setBackendWordBag(result.wordBag);
+          setWordBag(toDisplayWordBag(result.wordBag));
+
+          // Display the first message from the AI
+          const targetWords = result.wordBag.map((w) => w.word);
+          const firstMsg: Message = {
+            id: "first-" + Date.now(),
+            role: "assistant",
+            content: result.firstMessage,
+            timestamp: new Date(),
+            targetWords,
+          };
+          setMessages([firstMsg]);
+        }
       } catch (err) {
         if (cancelled) return;
         console.error("Failed to create session:", err);
-        setError("Couldn't start the conversation. Tap to retry.");
+        const errorMsg = err instanceof Error && err.message === "Daily limit reached"
+          ? "You've used all your chats for today. Master all your target words to earn bonus chats!"
+          : "Couldn't start the conversation. Tap to retry.";
+        setError(errorMsg);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -311,11 +470,22 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
     setTimeout(() => setShowToast(false), 2500);
   };
 
-  const handleWordLongPress = (word: string) => {
-    // TODO: Add to word list in Firestore
-    console.log("Adding word to list:", word);
+  const handleWordTap = useCallback((word: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedWord(word);
+    setShowWordIsland(true);
+  }, []);
+
+  const handleWordLongPress = useCallback((word: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectedWord(word);
+    setShowWordIsland(true);
+  }, []);
+
+  const handleAddWordFromIsland = useCallback((word: string) => {
+    setShowWordIsland(false);
     showSuccessToast(`"${word}" added to your list`);
-  };
+  }, []);
 
   const handleSend = useCallback(async () => {
     if (!inputText.trim() || !sessionId || isSending || sessionStatus === "complete") return;
@@ -343,24 +513,84 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
     try {
       const result = await sendUserMessage(sessionId, text);
 
-      // Add AI response
-      const aiMsg: Message = {
-        id: "ai-" + Date.now(),
-        role: "assistant",
-        content: result.aiMessage,
-        timestamp: new Date(),
-      };
+      // If the AI failed, show inline retry button instead of AI response
+      if (result.sessionStatus === "error") {
+        const errorMsg: Message = {
+          id: "error-" + Date.now(),
+          role: "error",
+          content: "Couldn't get a response. Tap to retry.",
+          timestamp: new Date(),
+          retryMessage: text,
+          retryMessageId: result.userMessageId,
+        };
+        setMessages((prev) => [...prev, errorMsg]);
+      } else {
+        // Get target words for highlighting in AI bubbles
+        const targetWords = result.updatedWordBag.map((w) => w.word);
 
-      setMessages((prev) => [...prev, aiMsg]);
+        // Use split messages if available, otherwise fall back to single message
+        const messageParts = result.aiMessages && result.aiMessages.length > 0
+          ? result.aiMessages
+          : [result.aiMessage];
 
-      // Update word bag and session status
-      setBackendWordBag(result.updatedWordBag);
-      setWordBag(toDisplayWordBag(result.updatedWordBag));
-      setSessionStatus(result.sessionStatus);
+        // Add messages with typing delay (stagger if multiple parts)
+        if (messageParts.length === 1) {
+          // Single message: add immediately
+          const aiMsg: Message = {
+            id: `ai-${Date.now()}`,
+            role: "assistant" as const,
+            content: messageParts[0],
+            timestamp: new Date(),
+            targetWords,
+          };
+          setMessages((prev) => [...prev, aiMsg]);
+        } else {
+          // Multiple messages: stagger with typing delays
+          // Typing speed: ~20 chars/second, minimum 800ms, maximum 3000ms
+          const calculateDelay = (text: string) => {
+            const baseDelay = Math.max(800, Math.min(3000, text.length * 50));
+            return baseDelay;
+          };
+
+          let cumulativeDelay = 0;
+          messageParts.forEach((part, i) => {
+            const delay = i === 0 ? 0 : cumulativeDelay;
+            setTimeout(() => {
+              const aiMsg: Message = {
+                id: `ai-${Date.now()}-${i}`,
+                role: "assistant" as const,
+                content: part,
+                timestamp: new Date(),
+                targetWords,
+              };
+              setMessages((prev) => [...prev, aiMsg]);
+            }, delay);
+            cumulativeDelay += calculateDelay(part);
+          });
+        }
+
+        setBackendWordBag(result.updatedWordBag);
+        setWordBag(toDisplayWordBag(result.updatedWordBag));
+        setSessionStatus(result.sessionStatus);
+
+        if (result.suggestedWords?.length) {
+          setSuggestedWords(result.suggestedWords);
+        }
+
+        if (result.bonusChatEarned) {
+          showSuccessToast("You earned a bonus chat!");
+        }
+      }
     } catch (err) {
       console.error("Failed to send message:", err);
-      // Show error toast but keep the user's message visible
-      showSuccessToast("Couldn't get a response. Try again.");
+      const errorMsg: Message = {
+        id: "error-" + Date.now(),
+        role: "error",
+        content: "Couldn't get a response. Tap to retry.",
+        timestamp: new Date(),
+        retryMessage: text,
+      };
+      setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsTyping(false);
       setIsSending(false);
@@ -387,6 +617,99 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
     setShowWordBag(!showWordBag);
   };
 
+  const handleRetryMessage = useCallback(async (errorMsg: Message) => {
+    if (!sessionId || isSending || !errorMsg.retryMessage) return;
+
+    // Remove the error bubble
+    setMessages((prev) => prev.filter((m) => m.id !== errorMsg.id));
+
+    setIsTyping(true);
+    setIsSending(true);
+
+    try {
+      const result = await sendUserMessage(
+        sessionId,
+        errorMsg.retryMessage,
+        errorMsg.retryMessageId // pass so backend skips duplicate user message
+      );
+
+      if (result.sessionStatus === "error") {
+        const newError: Message = {
+          id: "error-" + Date.now(),
+          role: "error",
+          content: "Couldn't get a response. Tap to retry.",
+          timestamp: new Date(),
+          retryMessage: errorMsg.retryMessage,
+          retryMessageId: result.userMessageId || errorMsg.retryMessageId,
+        };
+        setMessages((prev) => [...prev, newError]);
+      } else {
+        const targetWords = result.updatedWordBag.map((w) => w.word);
+        const messageParts = result.aiMessages && result.aiMessages.length > 0
+          ? result.aiMessages
+          : [result.aiMessage];
+
+        // Add messages with typing delay
+        if (messageParts.length === 1) {
+          const aiMsg: Message = {
+            id: `ai-${Date.now()}`,
+            role: "assistant" as const,
+            content: messageParts[0],
+            timestamp: new Date(),
+            targetWords,
+          };
+          setMessages((prev) => [...prev, aiMsg]);
+        } else {
+          const calculateDelay = (text: string) => {
+            return Math.max(800, Math.min(3000, text.length * 50));
+          };
+
+          let cumulativeDelay = 0;
+          messageParts.forEach((part, i) => {
+            const delay = i === 0 ? 0 : cumulativeDelay;
+            setTimeout(() => {
+              const aiMsg: Message = {
+                id: `ai-${Date.now()}-${i}`,
+                role: "assistant" as const,
+                content: part,
+                timestamp: new Date(),
+                targetWords,
+              };
+              setMessages((prev) => [...prev, aiMsg]);
+            }, delay);
+            cumulativeDelay += calculateDelay(part);
+          });
+        }
+
+        setBackendWordBag(result.updatedWordBag);
+        setWordBag(toDisplayWordBag(result.updatedWordBag));
+        setSessionStatus(result.sessionStatus);
+
+        if (result.suggestedWords?.length) {
+          setSuggestedWords(result.suggestedWords);
+        }
+
+        if (result.bonusChatEarned) {
+          showSuccessToast("You earned a bonus chat!");
+        }
+      }
+    } catch (err) {
+      console.error("Retry failed:", err);
+      const newError: Message = {
+        id: "error-" + Date.now(),
+        role: "error",
+        content: "Couldn't get a response. Tap to retry.",
+        timestamp: new Date(),
+        retryMessage: errorMsg.retryMessage,
+        retryMessageId: errorMsg.retryMessageId,
+      };
+      setMessages((prev) => [...prev, newError]);
+    } finally {
+      setIsTyping(false);
+      setIsSending(false);
+    }
+  }, [sessionId, isSending]);
+
   const handleRetry = () => {
     setError(null);
     setLoading(true);
@@ -396,11 +719,13 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
         setSessionId(result.sessionId);
         setBackendWordBag(result.wordBag);
         setWordBag(toDisplayWordBag(result.wordBag));
+        const targetWords = result.wordBag.map((w) => w.word);
         const firstMsg: Message = {
           id: "first-" + Date.now(),
           role: "assistant",
           content: result.firstMessage,
           timestamp: new Date(),
+          targetWords,
         };
         setMessages([firstMsg]);
         setLoading(false);
@@ -424,11 +749,20 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
       nextMessage.role !== item.role ||
       new Date(nextMessage.timestamp).getTime() - new Date(item.timestamp).getTime() > 60000;
 
+    // Render error/retry bubble
+    if (item.role === "error") {
+      return (
+        <View style={styles.messageRow}>
+          <ErrorBubble message={item} theme={theme} onRetry={handleRetryMessage} />
+        </View>
+      );
+    }
+
     return (
       <View>
         {showDate && <DateSeparator date={item.timestamp} theme={theme} />}
         <View style={[styles.messageRow, item.role === "user" && styles.messageRowUser]}>
-          <MessageBubble message={item} theme={theme} onWordLongPress={handleWordLongPress} />
+          <MessageBubble message={item} theme={theme} onWordTap={handleWordTap} onWordLongPress={handleWordLongPress} />
         </View>
         {isLastInGroup && <TimeStamp timestamp={item.timestamp} isUser={item.role === "user"} theme={theme} />}
       </View>
@@ -474,7 +808,13 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
             <Text style={[styles.backButtonText, { color: theme.accent }]}>‹</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.personaInfo}>
+          <TouchableOpacity
+            style={styles.personaInfo}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              navigation.navigate("PersonaDetail", { personaId: "chris" });
+            }}
+          >
             <Text style={[styles.personaName, { color: theme.text }]}>Chris</Text>
             <Text style={[styles.personaSubtitle, { color: theme.textSecondary }]}>
               {isTyping ? "typing..." : "online"}
@@ -517,18 +857,26 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
           theme={theme}
         />
 
-        {/* Session complete banner */}
+        {/* Word Definition Island */}
+        <WordDefinitionIsland
+          word={selectedWord}
+          visible={showWordIsland}
+          onClose={() => setShowWordIsland(false)}
+          onAddWord={handleAddWordFromIsland}
+          theme={theme}
+        />
+
+        {/* Session complete overlay */}
         {sessionStatus === "complete" && (
-          <View style={[styles.completeBanner, { backgroundColor: theme.accent }]}>
-            <Text style={[styles.completeBannerText, { color: theme.buttonText }]}>
-              Chat session complete!
-            </Text>
-            <TouchableOpacity onPress={handleBack}>
-              <Text style={[styles.completeBannerLink, { color: theme.buttonText }]}>
-                Return to Dashboard →
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <SessionCompleteCard
+            wordBag={wordBag}
+            suggestedWords={suggestedWords}
+            theme={theme}
+            onClose={handleBack}
+            onAddSuggestedWord={(word) => {
+              showSuccessToast(`"${word}" added to your list`);
+            }}
+          />
         )}
 
         {/* Input Area */}
@@ -542,16 +890,19 @@ export default function ChatScreen({ navigation }: ChatScreenProps) {
             }
           ]}>
             <View style={[styles.inputContainer, { backgroundColor: theme.inputBackground, borderColor: theme.border }]}>
-              <TouchableOpacity
-                style={styles.wordBagButton}
-                onPress={toggleWordBag}
-              >
-                <View style={styles.wordBagIcon}>
-                  <View style={[styles.iconLine, { backgroundColor: theme.accent }]} />
-                  <View style={[styles.iconLine, { backgroundColor: theme.accent }]} />
-                  <View style={[styles.iconLine, { backgroundColor: theme.accent }]} />
-                </View>
-              </TouchableOpacity>
+              {/* Only show word bag button if there are target words */}
+              {wordBag.length > 0 && (
+                <TouchableOpacity
+                  style={styles.wordBagButton}
+                  onPress={toggleWordBag}
+                >
+                  <View style={styles.wordBagIcon}>
+                    <View style={[styles.iconLine, { backgroundColor: theme.accent }]} />
+                    <View style={[styles.iconLine, { backgroundColor: theme.accent }]} />
+                    <View style={[styles.iconLine, { backgroundColor: theme.accent }]} />
+                  </View>
+                </TouchableOpacity>
+              )}
 
               <TextInput
                 style={[styles.messageInput, { height: inputHeight, color: theme.text }]}
@@ -600,20 +951,97 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: 32,
   },
-  completeBanner: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    alignItems: "center",
+  scrim: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(15, 25, 57, 0.15)",
+  },
+  bottomSheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 8,
+    paddingBottom: 40,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 32,
+    elevation: 20,
+  },
+  pullHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 24,
+  },
+  sheetContent: {
+    paddingHorizontal: 32,
+  },
+  sheetTitle: {
+    fontFamily: "DMSerifDisplay_400Regular",
+    fontSize: 24,
+    letterSpacing: -0.3,
+    marginBottom: 24,
+  },
+  divider: {
+    height: 1,
+    marginVertical: 24,
+  },
+  completionSection: {
+    marginBottom: 0,
+  },
+  suggestedWordsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
+    marginTop: 4,
   },
-  completeBannerText: {
+  suggestedChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  suggestedChipText: {
+    fontSize: 15,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    letterSpacing: 0.3,
+    marginBottom: 8,
+  },
+  sectionContent: {
+    fontSize: 17,
+    lineHeight: 26,
+    fontStyle: "italic",
+  },
+  sectionContentProgress: {
+    fontSize: 17,
+    lineHeight: 26,
+  },
+  bonusMessage: {
     fontSize: 16,
-    fontWeight: "600",
+    lineHeight: 24,
+    marginTop: 16,
   },
-  completeBannerLink: {
-    fontSize: 14,
-    fontWeight: "500",
-    textDecorationLine: "underline",
+  returnButton: {
+    width: "100%",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  returnButtonText: {
+    fontFamily: "CrimsonPro_600SemiBold",
+    fontSize: 17,
   },
   toast: {
     position: "absolute",
@@ -711,8 +1139,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
   },
-  highlightedWord: {
+  targetWord: {
     fontWeight: "600",
+  },
+  errorBubble: {
+    alignSelf: "flex-start",
+    borderRadius: 18,
+    borderBottomLeftRadius: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    maxWidth: "75%",
+    borderWidth: 1,
+    borderColor: "rgba(255, 59, 48, 0.3)",
+    borderStyle: "dashed",
+  },
+  errorBubbleText: {
+    fontSize: 14,
+    fontStyle: "italic",
   },
   dateSeparator: {
     alignItems: "center",

@@ -232,8 +232,8 @@ export default function WordListSelectionScreen({
           },
         ]}
       >
-        <Text style={styles.title}>Select Word List</Text>
-        <Text style={styles.subtitle}>Choose preset or create custom</Text>
+        <Text style={styles.title}>Pick a Starting List</Text>
+        <Text style={styles.subtitle}>You can always change or customize it later</Text>
       </Animated.View>
 
       <ScrollView 

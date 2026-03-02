@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verbalist - Premium</title>
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@300;400;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #F6F3E7;
+            --bg-secondary: #FAEBD7;
+            --accent-primary: #E3AF64;
+            --accent-secondary: #516AC8;
+            --accent-tertiary: #26428B;
+            --text-dark: #0F1939;
+            --text-gray: #8E8E93;
+            --white: #FFFFFF;
+        }
+
+        body {
+            font-family: 'Crimson Pro', serif;
+            background: #000;
+        }
+
+        .screen {
+            width: 430px;
+            height: 932px;
+            margin: 20px auto;
+            background: var(--bg-primary);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        /* Dashboard Background (dimmed) */
+        .dashboard-background {
+            width: 100%;
+            height: 100%;
+            background: var(--bg-primary);
+            padding: 80px 20px;
+            opacity: 0.4;
+        }
+
+        .conversation-item {
+            background: white;
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'DM Serif Display', serif;
+            font-size: 20px;
+            color: white;
+        }
+
+        .conv-info {
+            flex: 1;
+        }
+
+        .conv-name {
+            font-family: 'DM Serif Display', serif;
+            font-size: 17px;
+            color: var(--text-dark);
+        }
+
+        /* Scrim */
+        .scrim {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 25, 57, 0.2);
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        /* Bottom Drawer */
+        .bottom-drawer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--white);
+            border-radius: 24px 24px 0 0;
+            padding: 8px 0 40px;
+            box-shadow: 0 -4px 32px rgba(0, 0, 0, 0.15);
+            animation: slideUp 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+            max-height: 85%;
+            overflow-y: auto;
+        }
+
+        /* Pull Handle */
+        .pull-handle {
+            width: 40px;
+            height: 4px;
+            background: rgba(15, 25, 57, 0.15);
+            border-radius: 2px;
+            margin: 0 auto 28px;
+        }
+
+        .drawer-content {
+            padding: 0 28px;
+        }
+
+        /* Header */
+        .drawer-header {
+            margin-bottom: 24px;
+        }
+
+        .drawer-title {
+            font-family: 'DM Serif Display', serif;
+            font-size: 28px;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+        }
+
+        .drawer-subtitle {
+            font-size: 17px;
+            color: var(--text-gray);
+            line-height: 1.5;
+        }
+
+        /* Divider */
+        .divider {
+            height: 1px;
+            background: rgba(15, 25, 57, 0.08);
+            margin: 28px 0;
+        }
+
+        /* Feature List */
+        .feature-intro {
+            font-size: 15px;
+            color: var(--text-dark);
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+
+        .features-list {
+            margin-bottom: 28px;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+            margin-bottom: 12px;
+            font-size: 16px;
+            color: var(--text-dark);
+            line-height: 1.5;
+        }
+
+        .feature-bullet {
+            color: var(--accent-secondary);
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        /* Plan Options */
+        .plan-option {
+            border: 2px solid rgba(15, 25, 57, 0.1);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .plan-option.recommended {
+            border-color: var(--accent-tertiary);
+            background: rgba(38, 66, 139, 0.02);
+        }
+
+        .plan-option:hover {
+            border-color: var(--accent-tertiary);
+            transform: translateY(-2px);
+        }
+
+        .best-value-badge {
+            position: absolute;
+            top: -10px;
+            right: 20px;
+            background: var(--accent-tertiary);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .plan-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .plan-name {
+            font-family: 'DM Serif Display', serif;
+            font-size: 20px;
+            color: var(--text-dark);
+        }
+
+        .plan-price {
+            text-align: right;
+        }
+
+        .price-amount {
+            font-family: 'DM Serif Display', serif;
+            font-size: 24px;
+            color: var(--text-dark);
+        }
+
+        .price-period {
+            font-size: 13px;
+            color: var(--text-gray);
+        }
+
+        .plan-description {
+            font-size: 14px;
+            color: var(--text-gray);
+            line-height: 1.4;
+        }
+
+        .monthly-breakdown {
+            font-size: 13px;
+            color: var(--accent-primary);
+            margin-top: 4px;
+        }
+
+        /* CTA Button */
+        .cta-button {
+            width: 100%;
+            padding: 18px;
+            background: var(--accent-tertiary);
+            color: white;
+            border: none;
+            border-radius: 16px;
+            font-family: 'Crimson Pro', serif;
+            font-size: 17px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 24px;
+        }
+
+        .cta-button:hover {
+            background: var(--accent-secondary);
+            transform: translateY(-2px);
+        }
+
+        /* Secondary Actions */
+        .secondary-actions {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+            padding: 0 8px;
+        }
+
+        .secondary-link {
+            font-size: 15px;
+            color: var(--accent-secondary);
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        /* Terms */
+        .terms {
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-gray);
+            line-height: 1.5;
+            margin-top: 20px;
+            padding: 0 20px;
+        }
+
+        .terms a {
+            color: var(--accent-secondary);
+            text-decoration: none;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+            }
+            to {
+                transform: translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="screen">
+    <!-- Dashboard Background (dimmed) -->
+    <div class="dashboard-background">
+        <div class="conversation-item">
+            <div class="avatar">C</div>
+            <div class="conv-info">
+                <div class="conv-name">Chris</div>
+            </div>
+        </div>
+        <div class="conversation-item">
+            <div class="avatar">G</div>
+            <div class="conv-info">
+                <div class="conv-name">Gemma</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scrim -->
+    <div class="scrim"></div>
+
+    <!-- Bottom Drawer -->
+    <div class="bottom-drawer">
+        <div class="pull-handle"></div>
+        
+        <div class="drawer-content">
+            <!-- Header -->
+            <div class="drawer-header">
+                <div class="drawer-title">Meet Gemma</div>
+                <div class="drawer-subtitle">
+                    Gemma specializes in literary vocabulary and brings a sophisticated perspective to conversations.
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Features -->
+            <div class="feature-intro">
+                Gemma joins conversations with Verbalist Premium.
+            </div>
+
+            <div class="features-list">
+                <div class="feature-item">
+                    <span class="feature-bullet">•</span>
+                    <span>5 daily conversations, plus bonuses</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-bullet">•</span>
+                    <span>All four personas (Chris, Gemma, Eva, Sid)</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-bullet">•</span>
+                    <span>Create custom word lists</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-bullet">•</span>
+                    <span>Advanced progress tracking</span>
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Plan Options -->
+            <div class="plan-option recommended">
+                <div class="best-value-badge">Best Value</div>
+                <div class="plan-header">
+                    <div class="plan-name">Annual</div>
+                    <div class="plan-price">
+                        <div class="price-amount">$68</div>
+                        <div class="price-period">/year</div>
+                    </div>
+                </div>
+                <div class="plan-description">
+                    Best value for regular learners
+                </div>
+                <div class="monthly-breakdown">$5.67/month • Save 30%</div>
+            </div>
+
+            <div class="plan-option">
+                <div class="plan-header">
+                    <div class="plan-name">Monthly</div>
+                    <div class="plan-price">
+                        <div class="price-amount">$8</div>
+                        <div class="price-period">/month</div>
+                    </div>
+                </div>
+                <div class="plan-description">
+                    Flexible monthly subscription
+                </div>
+            </div>
+
+            <!-- CTA -->
+            <button class="cta-button">Start 7-Day Free Trial</button>
+
+            <!-- Secondary Actions -->
+            <div class="secondary-actions">
+                <a href="#" class="secondary-link">Continue with Chris</a>
+                <a href="#" class="secondary-link">Restore purchases</a>
+            </div>
+
+            <!-- Terms -->
+            <div class="terms">
+                Free trial for new subscribers. Auto-renews after trial. Cancel anytime.<br>
+                <a href="#">Terms</a> • <a href="#">Privacy</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

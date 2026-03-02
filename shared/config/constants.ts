@@ -1,6 +1,8 @@
-export const MESSAGE_LIMITS = {
-  freePerDay: 2,
-  premiumPerDay: 8,
+export const CHAT_LIMITS = {
+  freeBasePerDay: 1,
+  freeMaxPerDay: 3,       // base + max bonus chats
+  premiumBasePerDay: 5,
+  premiumMaxPerDay: 8,    // base + max bonus chats
 };
 
 export const MESSAGE_CHARACTER_LIMIT = 500;
